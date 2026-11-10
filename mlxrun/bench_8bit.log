@@ -1,0 +1,56 @@
+Error in sitecustomize; set PYTHONVERBOSE for traceback:
+FileNotFoundError: [Errno 2] No usable temporary directory found in ['/var/folders/gm/qdt4nkv91g3g3vb5kjtfqk2h0000gn/T/', '/tmp', '/var/tmp', '/usr/tmp', '/Users/junjian/WorkBuddy/2026-11-09-18-43-09/voxcpm2/mlxrun']
+[transformers] You are using a model of type `voxcpm2` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+{
+  "engine": "mlx-audio",
+  "model": "models/VoxCPM2-8bit",
+  "tag": "8bit",
+  "sample_rate": 48000,
+  "load_s": 0.9,
+  "warmup_s": 1.26,
+  "peak_mem_gb": 6.99,
+  "active_mem_gb": 3.0,
+  "runs": [
+    {
+      "label": "short0",
+      "text_len": 29,
+      "audio_s": 6.56,
+      "gen_s": 4.312,
+      "rtf": 0.657,
+      "wav": "outputs/mlx_8bit_short0.wav"
+    },
+    {
+      "label": "short1",
+      "text_len": 29,
+      "audio_s": 5.76,
+      "gen_s": 3.738,
+      "rtf": 0.649,
+      "wav": "outputs/mlx_8bit_short1.wav"
+    },
+    {
+      "label": "short2",
+      "text_len": 29,
+      "audio_s": 6.08,
+      "gen_s": 3.943,
+      "rtf": 0.649,
+      "wav": "outputs/mlx_8bit_short2.wav"
+    },
+    {
+      "label": "long0",
+      "text_len": 74,
+      "audio_s": 13.92,
+      "gen_s": 9.15,
+      "rtf": 0.657,
+      "wav": "outputs/mlx_8bit_long0.wav"
+    },
+    {
+      "label": "long1",
+      "text_len": 74,
+      "audio_s": 11.84,
+      "gen_s": 7.78,
+      "rtf": 0.657,
+      "wav": "outputs/mlx_8bit_long1.wav"
+    }
+  ],
+  "rtf_mean": 0.654
+}

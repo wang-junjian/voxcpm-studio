@@ -1,0 +1,17 @@
+# MLX 引擎独立环境（python -m venv mlxrun/.venv）
+#
+# 为什么要独立环境：主环境装的是 PyTorch 版 voxcpm（走 MPS），
+# MLX 侧用的是 mlx-audio 的纯 MLX 重实现，两者依赖互不兼容（torch 2.15 与 mlx 的
+# 底层 BLAS/加速库会互相拖累），必须分进程分环境。
+#
+# 注意：mlx-audio 会把 transformers 作为依赖装上，但**运行时绝不能 import transformers**
+# —— 它让 worker 启动从 0.7 s 变成 32–67 s。mlxrun/voxcpm_stream.py 的 LiteTokenizer
+# 只用 Rust 的 tokenizers 读 tokenizer.json，绕开了这条路径。
+
+mlx==0.32.4
+mlx-metal==0.32.4
+mlx-audio==0.6.4
+
+numpy==2.5.4
+tokenizers==0.23.3
+scipy==1.18.1

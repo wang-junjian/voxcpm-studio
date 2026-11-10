@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxCPM2 Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0B0B'/%3E%3Cpath d='M9 21V11h2v10H9zm4 0V9h2v12h-2zm4 0V13h2v8h-2zm4 0v-6h2v6h-2z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#F5F5F2;
+    --surface:#FFFFFF;
+    --ink:#0B0B0B;
+    --ink-2:#333331;
+    --muted:#76766F;
+    --line:#E2E2DC;
+    --line-strong:#C7C7C0;
+    --accent:#1D4ED8;
+    --ok:#157F4A;
+    --warn:#B42318;
+    --r:2px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif;
+    font-size:14px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:-0.005em;
+  }
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- 顶栏 ---------- */
+  header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    gap:24px;
+    padding:24px 32px 20px;
+    border-bottom:1px solid var(--line);
+    background:var(--bg);
+    position:sticky;top:0;z-index:20;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .brand h1{font-size:20px;font-weight:650;letter-spacing:-0.03em}
+  .brand .sub{
+    font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);
+  }
+  .status{display:flex;align-items:center;gap:16px;font-size:11px;letter-spacing:.04em;color:var(--muted)}
+  .status > span{white-space:nowrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line-strong);display:inline-block;margin-right:6px}
+  .dot.ok{background:var(--ok)}
+  .dot.wait{background:#D97706;animation:pulse 1.4s infinite}
+  .dot.err{background:var(--warn)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  /* ---------- 布局 ---------- */
+  main{
+    display:grid;
+    grid-template-columns:312px minmax(0,1fr);
+    gap:0;
+    align-items:start;
+  }
+  aside{
+    padding:24px 24px 32px 32px;
+    border-right:1px solid var(--line);
+    position:sticky;top:81px;
+    min-height:calc(100vh - 81px);
+    max-height:calc(100vh - 81px);
+    overflow-y:auto;
+    display:flex;flex-direction:column;
+  }
+  .stage{padding:24px 32px 64px;min-width:0}
+
+  /* hidden 属性需要显式压制，否则会被 display:flex 覆盖 */
+  [hidden]{display:none !important}
+
+  /* ---------- 通用元素 ---------- */
+  .label{
+    font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);display:block;margin-bottom:8px;
+  }
+  .group + .group{margin-top:24px;padding-top:24px;border-top:1px solid var(--line)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5}
+
+  .seg{display:flex;border:1px solid var(--line-strong);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+  .seg button{
+    flex:1;padding:9px 4px;border:0;background:transparent;cursor:pointer;
+    font:inherit;font-size:12px;font-weight:500;color:var(--ink-2);
+    transition:background .12s,color .12s;
+  }
+  .seg button + button{border-left:1px solid var(--line-strong)}
+  .seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .seg button:hover:not([aria-pressed="true"]):not(:disabled){background:#EFEFEA}
+  .seg button:disabled{opacity:.32;cursor:not-allowed}
+
+  textarea{
+    width:100%;min-height:132px;resize:vertical;padding:16px;
+    border:1px solid var(--line-strong);border-radius:var(--r);
+    background:var(--surface);font:inherit;font-size:15px;line-height:1.7;color:var(--ink);
+    outline:none;transition:border-color .12s;
+  }
+  textarea:focus{border-color:var(--ink)}
+  textarea::placeholder{color:#A3A39C}
+
+  .input{
+    width:100%;padding:9px 12px;border:1px solid var(--line-strong);border-radius:var(--r);
+    background:var(--surface);font:inherit;font-size:13px;color:var(--ink);outline:none;
+  }
+  .input:focus{border-color:var(--ink)}
+
+  input[type=range]{
+    -webkit-appearance:none;width:100%;height:20px;background:transparent;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line-strong)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+    background:var(--ink);margin-top:-5px;
+  }
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    height:44px;padding:0 20px;border:1px solid var(--ink);border-radius:var(--r);
+    background:var(--ink);color:#fff;font:inherit;font-size:13px;font-weight:600;
+    letter-spacing:.01em;cursor:pointer;transition:opacity .12s,transform .06s;
+  }
+  .btn:hover:not(:disabled){opacity:.86}
+  .btn:active:not(:disabled){transform:translateY(1px)}
+  .btn:disabled{opacity:.28;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-strong)}
+  .btn.ghost:hover:not(:disabled){background:#EFEFEA;opacity:1}
+  .btn.wide{width:100%}
+
+  .chip{
+    display:inline-block;padding:5px 10px;border:1px solid var(--line-strong);
+    border-radius:var(--r);background:var(--surface);font-size:12px;color:var(--ink-2);
+    cursor:pointer;transition:background .12s,border-color .12s;
+  }
+  .chip:hover{background:#EFEFEA;border-color:var(--ink)}
+
+  /* ---------- 参数面板 ---------- */
+  .field + .field{margin-top:16px}
+  .field-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .field-head .label{margin-bottom:0}
+  .field-val{font-size:12px;font-weight:600;letter-spacing:0}
+
+  .switch{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;user-select:none}
+  .switch-track{
+    width:36px;height:20px;border-radius:10px;background:var(--line-strong);
+    position:relative;transition:background .16s;flex:none;
+  }
+  .switch-track::after{
+    content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:#fff;transition:transform .16s;box-shadow:0 1px 2px rgba(0,0,0,.2);
+  }
+  .switch input{display:none}
+  .switch input:checked + .switch-track{background:var(--ink)}
+  .switch input:checked + .switch-track::after{transform:translateX(16px)}
+
+  details.adv{border-top:1px solid var(--line);padding-top:16px;margin-top:24px}
+  details.adv summary{
+    cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--muted);list-style:none;
+  }
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::after{content:" +";color:var(--line-strong)}
+  details.adv[open] summary::after{content:" −"}
+  details.adv .body{padding-top:16px}
+
+  .spec{
+    margin-top:auto;padding-top:20px;border-top:1px solid var(--line);
+    display:grid;grid-template-columns:auto 1fr;gap:6px 16px;
+    font-size:11px;color:var(--muted);letter-spacing:.02em;
+  }
+  .spec dt{font-weight:400}
+  .spec dd{text-align:right;color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+  /* ---------- 主区 ---------- */
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .row.between{justify-content:space-between}
+  .counter{font-size:11px;color:var(--muted);letter-spacing:.04em}
+
+  .presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+  .upload{
+    margin-top:12px;border:1px dashed var(--line-strong);border-radius:var(--r);
+    padding:20px;text-align:center;cursor:pointer;transition:border-color .12s,background .12s;
+    background:var(--surface);
+  }
+  .upload:hover,.upload.drag{border-color:var(--ink);background:#FAFAF7}
+  .upload strong{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
+  .upload span{font-size:12px;color:var(--muted)}
+
+  .result{
+    margin-top:24px;border:1px solid var(--line);border-radius:var(--r);
+    background:var(--surface);padding:20px;
+  }
+  .result[hidden]{display:none}
+  .result-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+  .meta{display:flex;gap:20px;font-size:11px;color:var(--muted);letter-spacing:.03em}
+  .meta b{color:var(--ink);font-weight:600}
+
+  .player{display:flex;align-items:center;gap:16px}
+  .play{
+    width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--ink);
+    background:var(--ink);color:#fff;display:grid;place-items:center;cursor:pointer;
+    transition:opacity .12s;
+  }
+  .play:hover{opacity:.85}
+  .play svg{width:16px;height:16px;fill:currentColor}
+
+  .wave-wrap{flex:1;min-width:0;position:relative;height:64px;cursor:pointer}
+  .wave-wrap canvas{width:100%;height:64px;display:block}
+
+  .err{
+    margin-top:16px;padding:12px 16px;border-left:2px solid var(--warn);
+    background:#FDF3F2;color:var(--warn);font-size:13px;border-radius:0 var(--r) var(--r) 0;
+  }
+  .err[hidden]{display:none}
+
+  /* ---------- 历史 ---------- */
+  .history{margin-top:40px}
+  .history h2{
+    font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);padding-bottom:12px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .hist-item{
+    display:flex;align-items:center;gap:16px;padding:14px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .hist-mode{
+    font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);border:1px solid var(--line);padding:2px 6px;border-radius:var(--r);
+    flex:none;width:62px;text-align:center;
+  }
+  .hist-eng{
+    font-size:9px;font-weight:600;letter-spacing:.08em;
+    color:var(--muted);flex:none;width:34px;
+  }
+  .hist-text{flex:1;min-width:0;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist-dur{font-size:11px;color:var(--muted);flex:none}
+  .icon-btn{
+    width:28px;height:28px;border:0;background:transparent;cursor:pointer;border-radius:var(--r);
+    color:var(--muted);display:grid;place-items:center;flex:none;
+  }
+  .icon-btn:hover{background:#EDEDE8;color:var(--ink)}
+  .icon-btn svg{width:14px;height:14px;fill:currentColor}
+  .empty{font-size:13px;color:var(--muted);padding:20px 0}
+
+  .spinner{
+    width:14px;height:14px;border:2px solid rgba(255,255,255,.35);
+    border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media (max-width:900px){
+    header{flex-direction:column;align-items:flex-start;gap:10px;padding:14px 20px}
+    .brand h1{font-size:19px}
+    .status{gap:14px;width:100%}
+    main{grid-template-columns:1fr}
+    aside{position:static;max-height:none;min-height:0;border-right:0;border-bottom:1px solid var(--line);padding:24px 20px 32px}
+    .spec{margin-top:24px}
+    .stage{padding:24px 20px 48px}
+  }
+  @media (max-width:420px){
+    .brand .sub{display:none}
+    .status{font-size:10px;gap:12px;letter-spacing:0}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>VoxCPM2 Studio</h1>
+    <span class="sub">本地语音合成</span>
+  </div>
+  <div class="status num">
+    <span id="statusModel"><span class="dot wait"></span>加载模型中</span>
+    <span id="statusDev">—</span>
+    <span id="statusSr">—</span>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="group">
+      <span class="label">推理引擎</span>
+      <div class="seg" id="engineSeg">
+        <button data-engine="mlx" aria-pressed="true">MLX</button>
+        <button data-engine="gguf" aria-pressed="false">GGUF</button>
+        <button data-engine="torch" aria-pressed="false">PyTorch</button>
+      </div>
+      <p class="hint" id="engineHint" style="margin-top:10px">MLX 8bit · 权重 3.0 GB · RTF 0.73 · 真流式，首包约 0.5 秒。</p>
+    </div>
+
+    <div class="group">
+      <span class="label">合成模式</span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="basic" aria-pressed="true">基础</button>
+        <button data-mode="design" aria-pressed="false">音色设计</button>
+        <button data-mode="clone" aria-pressed="false">克隆</button>
+      </div>
+      <p class="hint" id="modeHint" style="margin-top:10px">直接朗读输入文本，使用模型默认音色。</p>
+    </div>
+
+    <div class="group">
+      <span class="label">生成参数</span>
+      <div class="field">
+        <div class="field-head">
+          <span class="label" style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-2)">引导强度 cfg</span>
+          <span class="field-val num" id="cfgVal">2.0</span>
+        </div>
+        <input type="range" id="cfg" min="1" max="4" step="0.1" value="2">
+      </div>
+      <div class="field">
+        <div class="field-head">
+          <span class="label" style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-2)">推理步数</span>
+          <span class="field-val num" id="stepsVal">10</span>
+        </div>
+        <input type="range" id="steps" min="4" max="30" step="1" value="10">
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="label">播放方式</span>
+      <label class="switch">
+        <span style="font-size:13px">流式播放<span class="hint" style="display:block;margin:0">边生成边播放，MLX 首包约 0.5 秒</span></span>
+        <input type="checkbox" id="streamToggle">
+        <span class="switch-track"></span>
+      </label>
+      <label class="switch" style="margin-top:16px">
+        <span style="font-size:13px">低延迟优先<span class="hint" style="display:block;margin:0">不等缓冲、收到就播；合成慢于实时会断续</span></span>
+        <input type="checkbox" id="lowLatency">
+        <span class="switch-track"></span>
+      </label>
+    </div>
+
+    <details class="adv">
+      <summary>高级</summary>
+      <div class="body">
+        <div class="field">
+          <span class="label" style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-2)">随机种子</span>
+          <input class="input num" type="number" id="seed" value="42" min="0" max="999999">
+        </div>
+      </div>
+    </details>
+
+    <dl class="spec">
+      <dt>模型</dt><dd>VoxCPM2 · 2B</dd>
+      <dt>引擎</dt><dd id="specEngine">MLX 8bit</dd>
+      <dt>设备</dt><dd id="specDev">MPS</dd>
+      <dt>采样率</dt><dd>48 kHz</dd>
+      <dt>许可</dt><dd>Apache-2.0</dd>
+    </dl>
+  </aside>
+
+  <section class="stage">
+    <div class="row between" style="margin-bottom:8px">
+      <span class="label" style="margin:0">文本</span>
+      <span class="counter num"><span id="charCount">0</span> / 800</span>
+    </div>
+    <textarea id="text" maxlength="800" placeholder="输入要合成的文本……"></textarea>
+
+    <div class="presets" id="presets" hidden></div>
+
+    <div id="cloneBox" hidden>
+      <div class="upload" id="dropZone">
+        <strong>上传参考音频</strong>
+        <span>点击选择或拖拽文件 · wav / mp3 / flac · 建议 5–15 秒</span>
+      </div>
+      <input type="file" id="fileInput" accept="audio/*" hidden>
+      <div id="refInfo" class="hint" style="margin-top:8px" hidden></div>
+      <details class="adv" style="margin-top:16px;border-top:0;padding-top:0">
+        <summary>参考文本（可选）</summary>
+        <div class="body">
+          <input class="input" id="promptText" placeholder="参考音频里说的原话，填入可提升相似度">
+        </div>
+      </details>
+    </div>
+
+    <div class="row" style="margin-top:20px">
+      <button class="btn" id="genBtn" disabled>
+        <span id="genLabel">生成语音</span>
+      </button>
+      <span class="hint num" id="genTimer"></span>
+    </div>
+
+    <div class="err" id="err" hidden></div>
+
+    <div class="result" id="result" hidden>
+      <div class="result-head">
+        <div class="meta num">
+          <span>引擎 <b id="mEngine">—</b></span>
+          <span>时长 <b id="mDur">—</b></span>
+          <span>RTF <b id="mRtf">—</b></span>
+          <span>采样率 <b id="mSr">—</b></span>
+          <span id="mBuf" hidden></span>
+          <span id="mNote" hidden></span>
+        </div>
+        <a class="btn ghost" id="download" style="height:34px;padding:0 14px;font-size:12px;text-decoration:none" download>下载 WAV</a>
+      </div>
+      <div class="player">
+        <button class="play" id="playBtn" aria-label="播放">
+          <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="wave-wrap" id="waveWrap">
+          <canvas id="wave"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="history">
+      <h2><span>历史记录</span><span class="num" id="histCount" style="letter-spacing:0;font-weight:400"></span></h2>
+      <div id="histList"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    engine: localStorage.getItem("voxcpm.engine") || "mlx",
+    engines: {},
+    mode: "basic",
+    refId: null,
+    ready: false,
+    busy: false,
+    peaks: [],
+    duration: 0,
+    playing: false,
+    audioUrl: null,
+  };
+
+  let audioEl = new Audio();
+  audioEl.preload = "auto";
+
+  /* ---------------- 引擎选择 ---------------- */
+  const ENGINE_LABEL = { mlx: "MLX 8bit", gguf: "GGUF Q8_0", torch: "PyTorch" };
+  const ENGINE_HINT = {
+    mlx: "MLX 8bit · 权重 3.0 GB · RTF 0.73 · 真流式，首包约 0.5 秒。",
+    gguf: "GGUF Q8_0 · llama.cpp + Metal · 权重 3.3 GB · 真流式，首包约 1 秒。",
+    torch: "PyTorch fp32 · 权重 4.6 GB · 常驻约 9.5 GB · RTF 0.90。",
+  };
+
+  function setEngine(name) {
+    state.engine = name;
+    localStorage.setItem("voxcpm.engine", name);
+    [...$("engineSeg").children].forEach((x) =>
+      x.setAttribute("aria-pressed", String(x.dataset.engine === name))
+    );
+    $("engineHint").textContent = ENGINE_HINT[name] || "";
+    const se = $("specEngine");
+    if (se) se.textContent = ENGINE_LABEL[name] || name;
+    // 顶栏设备标记立刻跟着切换，不必等下一次健康轮询
+    const cur = state.engines[name] || {};
+    const dev = name === "mlx" || name === "gguf"
+      ? "Metal"
+      : String(cur.device || "mps").toUpperCase();
+    $("statusDev").textContent = ENGINE_LABEL[name] + " · " + dev;
+    const sd = $("specDev");
+    if (sd) sd.textContent = dev;
+  }
+
+  $("engineSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-engine]");
+    if (!b || b.disabled) return;
+    setEngine(b.dataset.engine);
+  });
+
+  /* ---------------- 健康检查 ---------------- */
+  async function pollHealth() {
+    try {
+      const r = await fetch("/api/health");
+      const h = await r.json();
+      const eng = h.engines || {};
+      state.engines = eng;
+
+      // 引擎按钮的可用性
+      for (const key of Object.keys(ENGINE_LABEL)) {
+        const btn = $("engineSeg").querySelector(`button[data-engine="${key}"]`);
+        if (!btn) continue;
+        const e = eng[key] || {};
+        btn.disabled = !e.ready;
+        btn.title = e.ready ? "" : (e.error || "不可用");
+      }
+
+      // 当前引擎掉线就切到还活着的那个
+      if (!(eng[state.engine] || {}).ready) {
+        const alt = Object.keys(ENGINE_LABEL).find((k) => eng[k] && eng[k].ready);
+        if (alt && alt !== state.engine) setEngine(alt);
+      }
+
+      const cur = eng[state.engine] || {};
+      if (cur.ready) {
+        state.ready = true;
+        $("statusModel").innerHTML = '<span class="dot ok"></span>就绪';
+        const devText = state.engine === "mlx" ? "Metal" : String(cur.device || "mps").toUpperCase();
+        $("statusDev").textContent = ENGINE_LABEL[state.engine] + " · " + devText;
+        const sr = cur.sample_rate || h.sample_rate;
+        $("statusSr").textContent = sr ? (sr / 1000).toFixed(0) + " kHz" : "—";
+        const sd = $("specDev");
+        if (sd) sd.textContent = devText;
+        $("genBtn").disabled = state.busy;
+        return;
+      }
+
+      state.ready = false;
+      $("genBtn").disabled = true;
+      if ((eng.torch || {}).error) {
+        $("statusModel").innerHTML = '<span class="dot err"></span>引擎不可用';
+        $("err").hidden = false;
+        $("err").textContent = eng.torch.error;
+        return;
+      }
+      $("statusModel").innerHTML = '<span class="dot wait"></span>加载模型中';
+      setTimeout(pollHealth, 1200);
+    } catch (e) {
+      setTimeout(pollHealth, 2000);
+    }
+  }
+
+  /* ---------------- 模式切换 ---------------- */
+  const HINTS = {
+    basic: "直接朗读输入文本，使用模型默认音色。",
+    design: "用括号写音色描述，如 (温和的年轻女声)。括号内的文字不会被念出来。",
+    clone: "上传一段参考音频，模型会复刻它的音色来说新的话。",
+  };
+
+  const PRESETS = [
+    "(温和的年轻女声，语速偏慢)",
+    "(低沉的成熟男声，播音腔)",
+    "(清亮的少女音，轻快)",
+    "(沉稳的中年女声，字正腔圆)",
+  ];
+
+  $("modeSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    state.mode = b.dataset.mode;
+    [...$("modeSeg").children].forEach((x) =>
+      x.setAttribute("aria-pressed", String(x === b))
+    );
+    $("modeHint").textContent = HINTS[state.mode];
+    $("presets").hidden = state.mode !== "design";
+    $("cloneBox").hidden = state.mode !== "clone";
+  });
+
+  PRESETS.forEach((p) => {
+    const c = document.createElement("button");
+    c.className = "chip";
+    c.textContent = p.replace(/^\(|\)$/g, "");
+    c.onclick = () => {
+      const ta = $("text");
+      const cur = ta.value.replace(/^\([^)]*\)/, "");
+      ta.value = p + cur;
+      ta.focus();
+      updateCount();
+    };
+    $("presets").appendChild(c);
+  });
+
+  /* ---------------- 文本计数 ---------------- */
+  function updateCount() {
+    $("charCount").textContent = $("text").value.length;
+  }
+  $("text").addEventListener("input", updateCount);
+
+  /* ---------------- 参数 ---------------- */
+  $("cfg").addEventListener("input", (e) => ($("cfgVal").textContent = Number(e.target.value).toFixed(1)));
+  $("steps").addEventListener("input", (e) => ($("stepsVal").textContent = e.target.value));
+
+  // 低延迟优先：记忆用户选择（默认关 = 顺滑优先，先缓冲到不会断供）
+  try {
+    $("lowLatency").checked = localStorage.getItem("voxcpm2.lowLatency") === "1";
+  } catch (e) { /* 忽略 */ }
+  $("lowLatency").addEventListener("change", (e) => {
+    try { localStorage.setItem("voxcpm2.lowLatency", e.target.checked ? "1" : "0"); } catch (err) { /* 忽略 */ }
+  });
+
+  /* ---------------- 参考音频上传 ---------------- */
+  const dz = $("dropZone");
+  dz.addEventListener("click", () => $("fileInput").click());
+  dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("drag"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+  dz.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dz.classList.remove("drag");
+    if (e.dataTransfer.files[0]) uploadRef(e.dataTransfer.files[0]);
+  });
+  $("fileInput").addEventListener("change", (e) => {
+    if (e.target.files[0]) uploadRef(e.target.files[0]);
+  });
+
+  async function uploadRef(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    dz.querySelector("strong").textContent = "上传中……";
+    try {
+      const r = await fetch("/api/ref", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || "上传失败");
+      state.refId = d.ref_id;
+      $("refInfo").hidden = false;
+      $("refInfo").innerHTML = `已载入 <b>${file.name}</b> · ${d.duration}s · ${d.sr} Hz`;
+      dz.querySelector("strong").textContent = "参考音频已就绪";
+      dz.querySelector("span").textContent = "点击可替换";
+    } catch (err) {
+      showError(err.message);
+      dz.querySelector("strong").textContent = "上传参考音频";
+    }
+  }
+
+  /* ---------------- 错误 ---------------- */
+  function showError(msg) {
+    $("err").hidden = false;
+    $("err").textContent = msg;
+  }
+  function clearError() { $("err").hidden = true; }
+
+  /* ---------------- 波形 ---------------- */
+  const canvas = $("wave");
+  const ctx2d = canvas.getContext("2d");
+
+  function fitCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function drawWave(peaks, progress = 0) {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    ctx2d.clearRect(0, 0, w, h);
+    if (!peaks.length) return;
+    const n = peaks.length;
+    const barW = w / n;
+    const mid = h / 2;
+    for (let i = 0; i < n; i++) {
+      const amp = Math.max(peaks[i] * (h / 2 - 2), 1);
+      const x = i * barW;
+      const played = i / n <= progress;
+      ctx2d.fillStyle = played ? "#1D4ED8" : "#C7C7C0";
+      ctx2d.fillRect(x + barW * 0.18, mid - amp, Math.max(barW * 0.64, 1), amp * 2);
+    }
+  }
+
+  function peaksFromFloat(f32, buckets = 240) {
+    const out = [];
+    const step = Math.max(1, Math.floor(f32.length / buckets));
+    for (let i = 0; i < f32.length; i += step) {
+      let m = 0;
+      const end = Math.min(i + step, f32.length);
+      for (let j = i; j < end; j++) {
+        const v = Math.abs(f32[j]);
+        if (v > m) m = v;
+      }
+      out.push(m);
+    }
+    const max = Math.max(...out) || 1;
+    return out.map((v) => v / max);
+  }
+
+  window.addEventListener("resize", () => {
+    fitCanvas();
+    drawWave(state.peaks, currentProgress());
+  });
+
+  function currentProgress() {
+    if (!audioEl.duration || !isFinite(audioEl.duration)) return 0;
+    return Math.min(audioEl.currentTime / audioEl.duration, 1);
+  }
+
+  $("waveWrap").addEventListener("click", (e) => {
+    if (!audioEl.duration || !isFinite(audioEl.duration)) return;
+    const r = $("waveWrap").getBoundingClientRect();
+    const p = (e.clientX - r.left) / r.width;
+    audioEl.currentTime = Math.max(0, Math.min(1, p)) * audioEl.duration;
+    drawWave(state.peaks, currentProgress());
+  });
+
+  /* ---------------- 播放 ---------------- */
+  const PLAY_PATH = '<path d="M8 5v14l11-7z"/>';
+  const PAUSE_PATH = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+
+  function setPlaying(p) {
+    state.playing = p;
+    $("playIcon").innerHTML = p ? PAUSE_PATH : PLAY_PATH;
+    $("playBtn").setAttribute("aria-label", p ? "暂停" : "播放");
+  }
+
+  $("playBtn").onclick = () => {
+    if (!state.audioUrl) return;
+    if (audioEl.paused) { audioEl.play(); } else { audioEl.pause(); }
+  };
+
+  audioEl.addEventListener("play", () => setPlaying(true));
+  audioEl.addEventListener("play", stopStreamSources);   // 回放整段时停掉还在排期的流式音源，避免叠音
+  audioEl.addEventListener("pause", () => setPlaying(false));
+  audioEl.addEventListener("ended", () => { setPlaying(false); drawWave(state.peaks, 1); });
+
+  let rafId = null;
+  function tick() {
+    if (!audioEl.paused) {
+      drawWave(state.peaks, currentProgress());
+      rafId = requestAnimationFrame(tick);
+    }
+  }
+  audioEl.addEventListener("play", () => { cancelAnimationFrame(rafId); tick(); });
+
+  /* ---------------- 生成 ---------------- */
+  function payload() {
+    return {
+      text: $("text").value.trim(),
+      mode: state.mode,
+      engine: state.engine,
+      ref_id: state.mode === "clone" ? state.refId : null,
+      prompt_text: state.mode === "clone" ? ($("promptText").value.trim() || null) : null,
+      cfg: Number($("cfg").value),
+      steps: Number($("steps").value),
+      seed: Number($("seed").value) || 0,
+    };
+  }
+
+  let timerId = null;
+  function startTimer() {
+    const t0 = performance.now();
+    $("genTimer").textContent = "0.0s";
+    timerId = setInterval(() => {
+      $("genTimer").textContent = ((performance.now() - t0) / 1000).toFixed(1) + "s";
+    }, 100);
+  }
+  function stopTimer() {
+    clearInterval(timerId);
+    timerId = null;
+  }
+
+  function setBusy(b) {
+    state.busy = b;
+    $("genBtn").disabled = b || !state.ready;
+    $("genLabel").textContent = b ? "生成中" : "生成语音";
+    const sp = $("genBtn").querySelector(".spinner");
+    if (b && !sp) {
+      const s = document.createElement("span");
+      s.className = "spinner";
+      $("genBtn").prepend(s);
+    } else if (!b && sp) {
+      sp.remove();
+    }
+  }
+
+  $("genBtn").onclick = async () => {
+    clearError();
+    const p = payload();
+    if (!p.text) { showError("请先输入文本"); return; }
+    if (p.mode === "clone" && !p.ref_id) { showError("克隆模式需要先上传参考音频"); return; }
+
+    setBusy(true);
+    startTimer();
+    try {
+      if ($("streamToggle").checked) {
+        await generateStream(p);
+      } else {
+        await generateOnce(p);
+      }
+    } catch (e) {
+      showError(e.message || String(e));
+    } finally {
+      stopTimer();
+      setBusy(false);
+      loadHistory();
+    }
+  };
+
+  async function generateOnce(p) {
+    const r = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "生成失败");
+
+    state.peaks = d.peaks || [];
+    state.duration = d.duration;
+    if (state.audioUrl) URL.revokeObjectURL(state.audioUrl);
+    state.audioUrl = d.url;
+    audioEl.src = d.url;
+    audioEl.load();
+
+    showResult(d);
+    fitCanvas();
+    drawWave(state.peaks, 0);
+  }
+
+  /* ---------- 流式 ---------- */
+
+  // 音频上下文复用 + 永不在一段合成结束时 close()。
+  // 之前每段流式结束就 close，而最后几块音频还排在未来的播放时间点上，
+  // close 会把它们一并丢掉（实测切掉 0.51s，正好是末尾两三个字）。
+  let actx = null;
+  let actxSr = 0;
+  let streamSources = [];   // 已排期、尚未播完的音源
+  let srafId = null;
+
+  function getAudioCtx(sr) {
+    if (actx && actxSr === sr && actx.state !== "closed") return actx;
+    if (actx) { try { actx.close(); } catch (e) { /* 忽略 */ } }
+    actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sr });
+    actxSr = sr;
+    return actx;
+  }
+
+  function stopStreamSources() {
+    for (const s of streamSources) {
+      s.onended = null;
+      try { s.stop(); } catch (e) { /* 已自然结束 */ }
+      try { s.disconnect(); } catch (e) { /* 忽略 */ }
+    }
+    streamSources = [];
+    if (srafId) { cancelAnimationFrame(srafId); srafId = null; }
+  }
+
+  // ---- 流式播放的缓冲闸门 ----
+  // 播放器恒按 1× 消耗，而合成速率 r（音频秒/墙钟秒）在 GGUF 上只有 0.7 左右：
+  // 实测 5.12s 音频要 7.38s 才生成完，块大小 640ms、块间隔最长 940ms。
+  // 收到第一块就开播必然中途断供（实测 8–20 次断续、累计静音 2.4–5.8s）。
+  // 播放全程不断供的充要条件是「开播时已缓冲 B ≥ (1 - r) · T」，
+  // 所以先攒到 needSec = (1 - r_est) · T_est 再开播；r≥1 的引擎（MLX）needSec≈0.12s，等同立即播。
+  const RATE_KEY = "voxcpm2.streamRate";
+  const RATE_DEFAULT = { gguf: 0.70, torch: 0.95, mlx: 1.15 };
+  const SEC_PER_CHAR = 0.20;
+
+  function rateHint(engine) {
+    try {
+      const m = JSON.parse(localStorage.getItem(RATE_KEY) || "{}");
+      const v = m[engine];
+      if (v && v.r > 0.3 && v.r < 1.8) return v;
+    } catch (e) { /* 忽略 */ }
+    return { r: RATE_DEFAULT[engine] || 1.0, spc: SEC_PER_CHAR };
+  }
+  function saveRateHint(engine, r, spc) {
+    if (!(r > 0.3 && r < 1.8) || !(spc > 0.02 && spc < 2)) return;
+    try {
+      const m = JSON.parse(localStorage.getItem(RATE_KEY) || "{}");
+      m[engine] = { r: Math.round(r * 1000) / 1000, spc: Math.round(spc * 1000) / 1000 };
+      localStorage.setItem(RATE_KEY, JSON.stringify(m));
+    } catch (e) { /* 忽略 */ }
+  }
+  function lowLatency() {
+    const el = $("lowLatency");
+    return !!(el && el.checked);
+  }
+
+  async function generateStream(p) {
+    const tClick = performance.now();    const r = await fetch("/api/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || "流式生成失败");
+    }
+    const tResp = performance.now();
+    state.streamMarks = { respMs: Math.round(tResp - tClick), firstChunkMs: null };
+
+    const sr = Number(r.headers.get("X-Sample-Rate") || 48000);
+    const ac = getAudioCtx(sr);
+    if (ac.state === "suspended") await ac.resume();
+    stopStreamSources();          // 上一段没播完的尾巴先停掉，避免叠音
+    if (!audioEl.paused) audioEl.pause();
+
+    const chars = (p.text || "").length;
+    const hint = rateHint(p.engine);
+    let rEst = hint.r;                 // 音频秒 / 墙钟秒
+    const reader = r.body.getReader();
+    let pending = new Uint8Array(0);
+    const all = [];
+    let nextTime = 0;
+    let playStart = 0;
+    let started = false;               // 是否已开始排期播放
+    let preBuf = [];                   // 开播前攒下的块（Float32Array）
+    let bufSec = 0;                    // 已缓冲、尚未排期的音频秒数
+    let needSec = 0;                   // 当前判定需要缓冲多少秒
+    let tFirst = 0;                    // 第一块到达时刻
+    let firstDur = 0;                  // 第一块的音频时长
+    let startedAtSec = 0;              // 开播时刻（相对点击）
+    let bufferAtStart = 0;             // 开播那一刻已缓冲的音频秒数
+    let underruns = [];                // 开播后每次断供的缺口毫秒
+    let arrivals = [];                 // [到达ms, 音频ms]，用于离线复核
+    let maxGapSec = 0;                 // 观察到的最长块间隔（欠载抖动余量）
+    let accPeaks = [];
+    let accDur = 0;
+
+    function scheduleChunk(f32) {
+      const buf = ac.createBuffer(1, f32.length, sr);
+      buf.copyToChannel(f32, 0);
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(ac.destination);
+      const now = ac.currentTime;
+      if (nextTime < now + 0.02) {
+        if (started && underruns.length < 200) {
+          underruns.push(Math.round((now + 0.02 - nextTime) * 1000));
+        }
+        nextTime = now + 0.02;
+      }
+      src.onended = () => {
+        const k = streamSources.indexOf(src);
+        if (k >= 0) streamSources.splice(k, 1);
+        try { src.disconnect(); } catch (e) { /* 忽略 */ }
+      };
+      src.start(nextTime);
+      streamSources.push(src);
+      nextTime += buf.duration;
+    }
+
+    function startPlayback() {
+      if (started) return;
+      started = true;
+      bufferAtStart = bufSec;
+      nextTime = ac.currentTime + 0.06;
+      playStart = nextTime;
+      startedAtSec = (performance.now() - tClick) / 1000;
+      for (const f32 of preBuf) scheduleChunk(f32);
+      preBuf = [];
+      $("mBuf").hidden = true;
+      startStreamProgress();
+    }
+
+    // 播放进度：按已排期时间轴推进，不再一律画满
+    function startStreamProgress() {
+      if (srafId) return;
+      const step = () => {
+        const prog = state.duration
+          ? Math.min(Math.max(ac.currentTime - playStart, 0) / state.duration, 1)
+          : 0;
+        drawWave(state.peaks, prog);
+        if (streamSources.length) {
+          srafId = requestAnimationFrame(step);
+        } else {
+          srafId = null;
+          drawWave(state.peaks, 0);
+        }
+      };
+      srafId = requestAnimationFrame(step);
+    }
+
+    $("result").hidden = false;
+    $("mEngine").textContent = ENGINE_LABEL[p.engine] || p.engine;
+    $("mDur").textContent = "0.00s";
+    $("mRtf").textContent = "—";
+    $("mSr").textContent = sr + " Hz";
+    $("download").style.visibility = "hidden";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const merged = new Uint8Array(pending.length + value.length);
+      merged.set(pending);
+      merged.set(value, pending.length);
+      const usable = merged.length - (merged.length % 2);
+      if (usable === 0) { pending = merged; continue; }
+
+      const i16 = new Int16Array(merged.buffer, merged.byteOffset, usable / 2);
+      const f32 = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+      all.push(f32);
+      pending = merged.slice(usable);
+
+      // 播放：已开播就直接排期；未开播则攒进缓冲，直到够覆盖整段欠载
+      const dur = f32.length / sr;
+      accDur += dur;
+      if (!tFirst) { tFirst = performance.now(); firstDur = dur; }
+      arrivals.push([Math.round(performance.now() - tClick), Math.round(dur * 1000)]);
+      if (arrivals.length > 1) {
+        const g = (arrivals[arrivals.length - 1][0] - arrivals[arrivals.length - 2][0]) / 1000;
+        if (g > maxGapSec) maxGapSec = g;
+      }
+
+      if (started) {
+        scheduleChunk(f32);
+      } else {
+        preBuf.push(f32);
+        bufSec += dur;
+        // 用「第一块之后」的音频与耗时估算速率，排除首包延迟与模型预热
+        const el = (performance.now() - tFirst) / 1000;
+        if (el > 0.35 && bufSec > firstDur) {
+          const meas = (bufSec - firstDur) / el;
+          if (meas > 0.25 && meas < 1.8) rEst = rEst * 0.5 + meas * 0.5;
+        }
+        const tEst = Math.min(Math.max(chars * (hint.spc || SEC_PER_CHAR), accDur, 0.8), 90);
+        // 欠载量 = (1 - r) · T；再补上「块间隔抖动」的余量（GGUF 每块 640ms、间隔最长 940ms，
+        // 只按平均速率算会在末尾恰好耗尽缓冲，实测仍会掉 2 次共 0.36s）。
+        // 抖动余量按段长缩放：短句的饥饿窗口短，不必为它多等近 1 秒。
+        const jitter = Math.min(Math.max(maxGapSec, 0.12), 0.95) * 0.6 * Math.min(1, tEst / 8);
+        needSec = lowLatency()
+          ? 0.12
+          : rEst >= 0.98
+            ? 0.12
+            : Math.max(0.12, (1 - rEst) * tEst + jitter);
+        if (bufSec >= needSec) {
+          startPlayback();
+        } else {
+          $("mBuf").hidden = false;
+          $("mBuf").textContent = `缓冲 ${bufSec.toFixed(1)}/${needSec.toFixed(1)}s`;
+        }
+      }
+
+      accPeaks = accPeaks.concat(peaksFromFloat(f32, 12));
+      state.peaks = normalizePeaks(accPeaks);
+      state.duration = accDur;
+      if (state.streamMarks && state.streamMarks.firstChunkMs == null) {
+        state.streamMarks.firstChunkMs = Math.round(performance.now() - tClick);
+      }
+      fitCanvas();
+      if (started) startStreamProgress();
+      else drawWave(state.peaks, 0);
+      $("mDur").textContent = accDur.toFixed(2) + "s";
+      $("mRtf").textContent = ((performance.now() - tClick) / 1000 / Math.max(accDur, .01)).toFixed(2);
+    }
+
+    // 流结束时若还没攒够闸门（短句/慢速引擎），照样把已收到的全部播出去
+    startPlayback();
+
+    // 这里刻意不 close()：尾部若干块仍在未来的播放时间点上排队，close 会连它们一起丢弃。
+    // 上下文复用，交给下一次合成或页面卸载回收。
+
+    const total = all.reduce((n, a) => n + a.length, 0);
+    const joined = new Float32Array(total);
+    let off = 0;
+    for (const a of all) { joined.set(a, off); off += a.length; }
+
+    if (state.audioUrl) URL.revokeObjectURL(state.audioUrl);
+    const blob = encodeWav(joined, sr);
+    state.audioUrl = URL.createObjectURL(blob);
+    audioEl.src = state.audioUrl;
+    $("download").href = state.audioUrl;
+    $("download").setAttribute("download", "voxcpm2-stream.wav");
+    $("download").style.visibility = "visible";
+
+    state.peaks = peaksFromFloat(joined, 240);
+    state.duration = joined.length / sr;
+    fitCanvas();
+    if (streamSources.length) startStreamProgress();
+    else drawWave(state.peaks, 0);
+    $("playBtn").disabled = false;
+
+    // 把本段的实测速率与「字数→音频秒」写回缓存，下一段从第一个块起就能判断准。
+    // 若仍出现断供，说明闸门估得偏乐观，下段按更保守的速率多等一点。
+    const genWall = (performance.now() - tClick) / 1000;
+    const measR = accDur / Math.max(genWall, 0.1);
+    const measSpc = chars ? accDur / chars : 0;
+    const rToSave = underruns.length ? Math.min(measR, rEst) * 0.92 : measR;
+    saveRateHint(p.engine, rToSave, measSpc);
+
+    window.__streamStats = {
+      engine: p.engine,
+      chars,
+      audioSec: +accDur.toFixed(3),
+      genWallSec: +genWall.toFixed(3),
+      rateWall: +measR.toFixed(3),          // 端到端（含首包）音频秒/墙钟秒
+      secPerChar: +measSpc.toFixed(4),
+      rateEstAtStart: +rEst.toFixed(3),
+      needSec: +needSec.toFixed(3),
+      jitterSec: +maxGapSec.toFixed(3),
+      bufferedAtStart: +bufferAtStart.toFixed(3),
+      startedAtSec: +startedAtSec.toFixed(3),
+      underrunCount: underruns.length,
+      underrunMs: underruns.reduce((a, b) => a + b, 0),
+      underruns,
+      arrivals,
+    };
+  }
+
+  function normalizePeaks(arr) {
+    const max = Math.max(...arr) || 1;
+    return arr.map((v) => v / max);
+  }
+
+  function encodeWav(f32, sr) {
+    const buf = new ArrayBuffer(44 + f32.length * 2);
+    const v = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, "RIFF"); v.setUint32(4, 36 + f32.length * 2, true); w(8, "WAVE");
+    w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+    v.setUint16(22, 1, true); v.setUint32(24, sr, true);
+    v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    w(36, "data"); v.setUint32(40, f32.length * 2, true);
+    let o = 44;
+    for (let i = 0; i < f32.length; i++, o += 2) {
+      const s = Math.max(-1, Math.min(1, f32[i]));
+      v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([buf], { type: "audio/wav" });
+  }
+
+  function showResult(d) {
+    $("result").hidden = false;
+    $("mEngine").textContent = ENGINE_LABEL[d.engine] || ENGINE_LABEL[state.engine] || "—";
+    $("mDur").textContent = d.duration.toFixed(2) + "s";
+    $("mRtf").textContent = d.rtf.toFixed(2);
+    $("mSr").textContent = d.sr + " Hz";
+
+    // 生成侧做过自动补救时如实告知：换种子重试 / 响度归一，避免电平变化显得莫名其妙
+    const notes = [];
+    if (d.attempts > 1) notes.push(`换种子重试 ${d.attempts - 1} 次（原 seed 产出气声）`);
+    if (d.gain && Math.abs(d.gain - 1) > 0.05) {
+      notes.push(`响度归一 ×${d.gain.toFixed(1)}`);
+    }
+    const note = $("mNote");
+    note.hidden = notes.length === 0;
+    note.textContent = notes.join(" · ");
+    note.title = notes.join("\n");
+
+    $("download").href = d.url;
+    $("download").setAttribute("download", `voxcpm2-${d.id}.wav`);
+    $("playBtn").disabled = false;
+  }
+
+  /* ---------------- 历史 ---------------- */
+  const MODE_LABEL = { basic: "基础", design: "音色", clone: "克隆" };
+
+  async function loadHistory() {
+    try {
+      const r = await fetch("/api/history?limit=20");
+      const items = await r.json();
+      const list = $("histList");
+      list.innerHTML = "";
+      $("histCount").textContent = items.length ? `${items.length} 条` : "";
+      if (!items.length) {
+        list.innerHTML = '<div class="empty">还没有生成记录</div>';
+        return;
+      }
+      for (const it of items) {
+        const row = document.createElement("div");
+        row.className = "hist-item";
+        row.innerHTML = `
+          <span class="hist-mode">${MODE_LABEL[it.mode] || it.mode}</span>
+          <span class="hist-eng">${({ mlx: "MLX", gguf: "GGUF", torch: "PT" })[it.engine || "torch"] || "PT"}</span>
+          <span class="hist-text" title="${it.text.replace(/"/g, "&quot;")}">${escapeHtml(it.text)}</span>
+          <span class="hist-dur num">${it.duration.toFixed(2)}s</span>
+          <button class="icon-btn" data-act="play" data-id="${it.id}" aria-label="播放">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon-btn" data-act="del" data-id="${it.id}" aria-label="删除">
+            <svg viewBox="0 0 24 24"><path d="M6 7h12l-1 13H7L6 7zm3-3h6l1 1h3v2H5V5h3l1-1z"/></svg>
+          </button>`;
+        list.appendChild(row);
+      }
+    } catch (e) {
+      /* 静默 */
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  $("histList").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    const id = b.dataset.id;
+    if (b.dataset.act === "play") {
+      if (state.audioUrl && state.audioUrl.startsWith("blob:")) URL.revokeObjectURL(state.audioUrl);
+      state.audioUrl = `/api/audio/${id}.wav`;
+      audioEl.src = state.audioUrl;
+      audioEl.play();
+      const r = await fetch(`/api/history?limit=20`);
+      const items = await r.json();
+      const it = items.find((x) => x.id === id);
+      if (it) {
+        state.peaks = [];
+        state.duration = it.duration;
+        showResult({ ...it, url: state.audioUrl });
+        $("download").href = state.audioUrl;
+        $("download").setAttribute("download", `voxcpm2-${id}.wav`);
+        fitCanvas();
+        drawWave([], 0);
+        drawWaveFromUrl(state.audioUrl);
+      }
+    } else {
+      await fetch(`/api/history/${id}`, { method: "DELETE" });
+      loadHistory();
+    }
+  });
+
+  async function drawWaveFromUrl(url) {
+    try {
+      const buf = await (await fetch(url)).arrayBuffer();
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const ab = await ac.decodeAudioData(buf);
+      const d = ab.getChannelData(0);
+      state.peaks = peaksFromFloat(d, 240);
+      await ac.close();
+      fitCanvas();
+      drawWave(state.peaks, 0);
+    } catch (e) { /* 忽略 */ }
+  }
+
+  /* ---------------- 初始化 ---------------- */
+  fitCanvas();
+  drawWave([], 0);
+  updateCount();
+  setEngine(state.engine);
+  pollHealth();
+  loadHistory();
+
+  // 调试钩子：供自动化验证读取播放器状态
+  window.__vox = { state, audio: audioEl };
+})();
+</script>
+</body>
+</html>

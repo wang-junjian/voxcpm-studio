@@ -1,0 +1,28 @@
+# 主环境：Web 主服务 + PyTorch 引擎 + 基准/诊断脚本
+# 完整锁定版本见 requirements.lock.txt（149 包，含全部传递依赖）
+
+# 推理
+torch==2.15.0
+torchaudio==2.11.1
+voxcpm==2.0.3
+
+# Web 服务
+fastapi==0.162.2
+uvicorn==0.54.0
+pydantic==2.14.3
+python-multipart==0.0.33   # /api/ref 上传参考音频
+httpx==0.28.1
+
+# 音频与数值
+numpy==2.5.4
+soundfile==0.14.0
+tokenizers==0.23.3
+matplotlib==3.11.2         # make_figure.py
+
+# 仅 ASR 回环评测需要（asr_check.py / asr_one.py / scan_*.py）
+# 不装也能跑推理与 Web 界面
+funasr==1.4.24
+
+# 仅 GGUF 权重转换与校验需要（convert_voxcpm2_to_gguf.py）
+gguf==0.19.0
+safetensors==0.8.0
