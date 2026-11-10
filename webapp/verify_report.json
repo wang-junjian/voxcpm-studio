@@ -1,0 +1,65 @@
+{
+  "url": "http://127.0.0.1:8817",
+  "steps": [
+    {
+      "step": "模型就绪",
+      "model": "就绪",
+      "device": "MPS",
+      "sr": "48 kHz",
+      "btnEnabled": true
+    },
+    {
+      "step": "布局检查",
+      "overflow": [],
+      "scrollW": 1440,
+      "docW": 1440
+    },
+    {
+      "step": "基础合成",
+      "dur": "4.64s",
+      "rtf": "1.32",
+      "sr": "48000 Hz",
+      "hasWave": true,
+      "downloadHref": "/api/audio/037ed045f7ee.wav"
+    },
+    {
+      "step": "波形像素",
+      "inked": 65032,
+      "total": 246272
+    },
+    {
+      "step": "音色设计模式",
+      "presetsVisible": true,
+      "presetCount": 4,
+      "hint": "用括号写音色描述，如 (温和的年轻女声)。括号内的文字不会被念出来。"
+    },
+    {
+      "step": "克隆模式",
+      "uploadVisible": true,
+      "promptTextVisible": true
+    },
+    {
+      "step": "历史记录",
+      "count": 14,
+      "first": "这是网页应用里生成的语音，用来验证整条链路是否通畅。"
+    },
+    {
+      "step": "流式合成",
+      "firstChunkMs": 44,
+      "dur": "3.84s",
+      "rtf": "流式 1.00",
+      "downloadVisible": true,
+      "blobReady": true,
+      "decoded": {
+        "dur": 3.84,
+        "sr": 44100,
+        "ch": 1
+      }
+    }
+  ],
+  "errors": [],
+  "known": [
+    "stream chunked 结束标记 (net::ERR_ABORTED)"
+  ],
+  "ok": true
+}

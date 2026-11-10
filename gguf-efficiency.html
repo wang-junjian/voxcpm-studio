@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GGUF 路线还能快多少 · VoxCPM2 瓶颈定位与实测优化</title>
+<style>
+  :root{
+    --bg:#F7F7F4; --card:#FFFFFF; --ink:#141519; --ink2:#3B3D44; --muted:#71737A;
+    --line:#E4E4DE; --line2:#EFEFEA;
+    --vae:#A8622A; --cfm:#4C5B73; --lm:#2F6F5B;
+    --vae-bg:#F7EDE4; --cfm-bg:#EEF0F4; --lm-bg:#EAF1EE;
+    --r:3px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,"SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:56px 32px 96px}
+  code,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  header{border-bottom:1px solid var(--line);padding-bottom:32px;margin-bottom:44px}
+  .kicker{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 16px}
+  h1{font-size:38px;line-height:1.22;letter-spacing:-.02em;font-weight:650;margin:0 0 18px;max-width:26ch}
+  .sub{font-size:16px;color:var(--ink2);max-width:68ch;margin:0 0 26px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px 28px;font-size:12px;color:var(--muted)}
+  .meta-row b{color:var(--ink2);font-weight:600}
+
+  section{margin:0 0 56px}
+  h2{font-size:12px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;font-weight:640;letter-spacing:-.01em;margin:32px 0 10px}
+  p{margin:0 0 14px;max-width:74ch}
+  ul,ol{margin:0 0 16px;padding-left:22px;max-width:74ch}
+  li{margin:6px 0}
+  strong{font-weight:640}
+  code{font-size:12.5px;background:#F2F2EE;padding:1px 5px;border-radius:2px;color:var(--ink2)}
+
+  .verdict{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin:0 0 20px}
+  .verdict > div{background:var(--card);padding:20px 20px 22px;display:flex;flex-direction:column}
+  .verdict .tag{display:inline-block;font-size:10px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:2px;margin-bottom:12px}
+  .t-vae{background:var(--vae-bg);color:var(--vae)}
+  .t-cfm{background:var(--cfm-bg);color:var(--cfm)}
+  .t-lm{background:var(--lm-bg);color:var(--lm)}
+  .verdict h4{margin:0 0 6px;font-size:15px;font-weight:640;letter-spacing:-.01em}
+  .verdict p{margin:0;font-size:13px;color:var(--ink2);line-height:1.65}
+  .verdict .big{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:auto;padding-top:12px;border-top:1px solid var(--line2)}
+  .verdict .big b{color:var(--ink);font-weight:600}
+
+  .callout{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:var(--r);padding:18px 22px;margin:22px 0;font-size:14px;color:var(--ink2)}
+  .callout b{color:var(--ink)}
+  .callout.warn{border-left-color:var(--vae)}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:600px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line2);vertical-align:top}
+  thead th{font-size:10.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:#FBFBF9;border-bottom:1px solid var(--line);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody th{font-weight:500;color:var(--muted);font-size:12.5px;white-space:nowrap}
+  td b{font-weight:640}
+  .best{background:#F2F7F4}
+  .num{font-size:12.5px;text-align:right}
+  td.num,th.num{text-align:right}
+  .pill{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:2px;background:var(--line2);color:var(--ink2)}
+  .pill.hot{background:var(--vae-bg);color:var(--vae)}
+
+  .figure{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px 20px 16px;margin:24px 0}
+  .figure svg{display:block;width:100%;height:auto}
+  .figcap{font-size:11.5px;color:var(--muted);margin:14px 4px 0;line-height:1.65}
+
+  .bars{display:flex;flex-direction:column;gap:12px}
+  .bar-row{display:grid;grid-template-columns:96px 1fr 74px;align-items:center;gap:9px}
+  .bar-label{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .bar-track{height:10px;background:var(--line2);border-radius:2px;position:relative}
+  .bar-fill{height:100%;border-radius:2px}
+  .bar-val{font-family:var(--mono);font-size:11.5px;color:var(--ink2);text-align:right}
+  .f-1{background:#C9A488} .f-2{background:#B7794B} .f-4{background:var(--vae)}
+
+  .findings{counter-reset:f;margin:0;padding:0;list-style:none}
+  .findings li{counter-increment:f;position:relative;padding:20px 0 20px 46px;border-bottom:1px solid var(--line);margin:0;max-width:none}
+  .findings li:first-child{border-top:1px solid var(--line)}
+  .findings li::before{content:counter(f,decimal-leading-zero);position:absolute;left:0;top:20px;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+  .findings h4{margin:0 0 6px;font-size:15px;font-weight:640;letter-spacing:-.01em}
+  .findings p{margin:0;font-size:13.5px;color:var(--ink2);max-width:76ch}
+  .findings .ev{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:8px;display:block}
+
+  pre{background:#FBFBF9;border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--ink2);margin:14px 0 18px}
+  pre .c{color:#8C8E95}
+
+  footer{border-top:1px solid var(--line);margin-top:64px;padding-top:24px;font-size:12px;color:var(--muted)}
+  footer p{margin:0 0 6px;max-width:none}
+
+  @media (max-width:820px){
+    .wrap{padding:36px 20px 64px}
+    h1{font-size:28px}
+    .verdict{grid-template-columns:1fr}
+    .bar-row{grid-template-columns:78px 1fr 64px}
+  }
+  @media print{body{background:#fff}.wrap{max-width:none;padding:0}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="kicker">实测报告 · 2026-11-10 · GGUF / llama.cpp-omni</p>
+  <h1>GGUF 路线还能快多少：把「慢」拆到算子这一级</h1>
+  <p class="sub">
+    GGUF 路线卡在 RTF ≈ 1.3–1.5，一直归因于「llama.cpp 不如 MLX」。加完分段计时后发现，
+    <b>BaseLM 只占每帧的 2.4%，真正吃掉 70% 的是 AudioVAE 解码</b>，而它的算力利用率只有约 1%。
+    这篇把每个 patch 的 238 ms 拆开，逐条证伪四个直觉假设，并给出一个已经落地的改动：<b>RTF 降 20%+，首包不变</b>。
+  </p>
+  <div class="meta-row">
+    <span>机器 <b>Apple M2 Max / 64 GB</b></span>
+    <span>后端 <b>ggml Metal（全层 offload）</b></span>
+    <span>权重 <b>BaseLM Q8_0 + Acoustic F16</b></span>
+    <span>口径 <b>cfg 2.0 / seed 42 / 48 kHz</b></span>
+  </div>
+</header>
+
+<section>
+  <h2>结论先行</h2>
+  <div class="verdict">
+    <div>
+      <span class="tag t-vae">瓶颈</span>
+      <h4>AudioVAE 占 70%</h4>
+      <p>每 160 ms 音频要付 167 ms 的 VAE 解码，单这一项就接近实时。CFM 扩散头 61.5 ms，BaseLM 只有 5.8 ms。</p>
+      <div class="big">VAE <b>167 ms</b> · CFM <b>61.5 ms</b> · LM <b>5.8 ms</b></div>
+    </div>
+    <div>
+      <span class="tag t-lm">已拿到</span>
+      <h4>攒批解码，RTF −20%</h4>
+      <p>VAE 吞吐随序列长度上升。首块仍单独出保持首包延迟，之后攒 4 个 patch 一图解码。</p>
+      <div class="big">长文本 <b>1.835 → 1.335</b> · 首包 <b>不变</b></div>
+    </div>
+    <div>
+      <span class="tag t-cfm">没拿到</span>
+      <h4>调参调不到实时</h4>
+      <p>建图、量化、im2col 精度、批量全都试过，都不是主因。再往下必须改 VAE 的算子实现，不是改配置。</p>
+      <div class="big">地板 <b>RTF ≈ 1.0</b>（VAE 单独）</div>
+    </div>
+  </div>
+  <p>
+    先明确口径：RTF = 生成耗时 ÷ 音频时长，<b>大于 1 就是慢于实时</b>。流式能播是因为首包几百毫秒给了缓冲，
+    但长文本一旦 RTF 持续大于 1，播放端迟早饿死。所以这里的每一个百分点都算数。
+  </p>
+</section>
+
+<section>
+  <h2>一个 patch 的 238 ms 花在哪</h2>
+  <p>
+    流式路径每 160 ms 音频会调用一次 <code>decode_step</code>（LM + 扩散）和一次 <code>decode_patch_streaming</code>（VAE）。
+    给两处加打点后，20 个 patch 的数据高度稳定，波动不到 3 ms：
+  </p>
+  <div class="figure">
+    <svg viewBox="0 0 680 172" role="img" aria-label="每 patch 耗时分解">
+      <text x="0" y="14" font-size="10.5" font-weight="600" letter-spacing="1.2" fill="#71737A">每 PATCH 耗时（160 MS 音频）</text>
+      <text x="680" y="14" font-size="10.5" fill="#71737A" text-anchor="end" font-family="ui-monospace,monospace">总计 238 ms</text>
+
+      <!-- 条形：总宽 600，比例 600/238 = 2.521 px/ms -->
+      <rect x="0" y="30" width="421" height="34" fill="#A8622A"/>
+      <rect x="421" y="30" width="155" height="34" fill="#4C5B73"/>
+      <rect x="576" y="30" width="24" height="34" fill="#2F6F5B"/>
+
+      <text x="14" y="52" font-size="13" font-weight="600" fill="#FFFFFF">AudioVAE 解码</text>
+      <text x="150" y="52" font-size="12" fill="#F7EDE4" font-family="ui-monospace,monospace">167 ms · 70%</text>
+
+      <text x="432" y="52" font-size="12" font-weight="600" fill="#FFFFFF">CFM 扩散</text>
+      <text x="432" y="66" font-size="10.5" fill="#DCE1EA" font-family="ui-monospace,monospace">61.5 ms · 26%</text>
+
+      <!-- 5.8 + 3.7 合成 9.5ms → 24px，标注引到下方 -->
+      <line x1="600" y1="64" x2="600" y2="88" stroke="#C4C6C0" stroke-dasharray="2 2"/>
+      <text x="600" y="102" font-size="10.5" fill="#3B3D44" text-anchor="middle" font-family="ui-monospace,monospace">LM+FSQ 9.5 ms · 4%</text>
+
+      <!-- 时间轴 -->
+      <line x1="0" y1="120" x2="600" y2="120" stroke="#E4E4DE"/>
+      <line x1="0" y1="120" x2="0" y2="126" stroke="#C4C6C0"/>
+      <line x1="421" y1="120" x2="421" y2="126" stroke="#C4C6C0"/>
+      <line x1="576" y1="120" x2="576" y2="126" stroke="#C4C6C0"/>
+      <line x1="600" y1="120" x2="600" y2="126" stroke="#C4C6C0"/>
+      <text x="0" y="142" font-size="10" fill="#71737A" font-family="ui-monospace,monospace">0</text>
+      <text x="421" y="142" font-size="10" fill="#71737A" text-anchor="middle" font-family="ui-monospace,monospace">167</text>
+      <text x="576" y="142" font-size="10" fill="#71737A" text-anchor="middle" font-family="ui-monospace,monospace">229</text>
+      <text x="600" y="142" font-size="10" fill="#71737A" text-anchor="end" font-family="ui-monospace,monospace">238 ms</text>
+
+      <text x="0" y="166" font-size="10.5" fill="#A8622A">单 VAE 一项就是 RTF 1.04 —— 它本来就已经超了实时线</text>
+    </svg>
+    <p class="figcap">
+      流式口径，timesteps=10，20 个 patch 平均。VAE 内含 0.15 ms 建图 + 4.6 ms 显存分配 + 162 ms 计算 + 0.02 ms 读回；
+      「建图」几乎免费，这直接推翻了第一个直觉。
+    </p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>阶段</th><th class="num">每 patch</th><th class="num">占 238 ms</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr class="best"><td><b>AudioVAE 解码</b></td><td class="num"><b>167.0 ms</b></td><td class="num">70.2%</td><td>build 0.15 / alloc 4.6 / compute 162 / read 0.02</td></tr>
+        <tr><td>CFM 扩散 + CFG + LocEnc + stop</td><td class="num">61.5 ms</td><td class="num">25.8%</td><td>10 步 Euler，cond/uncond 双 batch 一次前排</td></tr>
+        <tr><td>BaseLM 28 层（Q8_0）</td><td class="num">5.8 ms</td><td class="num">2.4%</td><td>含 last-hidden 读回</td></tr>
+        <tr><td>ResidualLM 8 层</td><td class="num">2.9 ms</td><td class="num">1.2%</td><td>—</td></tr>
+        <tr><td>FSQ + residual 融合</td><td class="num">0.8 ms</td><td class="num">0.3%</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <b>第一个反直觉之处：量化对这条路线几乎没有意义。</b>
+    BaseLM 从 F16 换到 Q8_0 省了 1.9 GB 内存，但它在每帧里只占 5.8 ms。
+    之前观察到「Q8_0 在 Metal 上不提速」，真正的原因不是量化没生效，而是<b>被量化加速的那部分根本不是瓶颈</b>。
+  </div>
+</section>
+
+<section>
+  <h2>把 VAE 拆到 block 级</h2>
+  <p>
+    最有信息量的实验是把解码器逐段截断（<code>VOXCPM2_VAE_UNTIL=n</code>，只跑前 n 个 block 后直接输出），
+    20 个 patch 一起解码，量出每个 block 的边际成本：
+  </p>
+  <div class="figure">
+    <svg viewBox="0 0 680 214" role="img" aria-label="VAE 每个 block 的每 patch 边际成本">
+      <text x="0" y="14" font-size="10.5" font-weight="600" letter-spacing="1.2" fill="#71737A">每个 DECODER BLOCK 的边际成本（MS / PATCH）</text>
+
+      <!-- 基准线 40ms 高 = 120px；柱宽 64，间距 106 -->
+      <line x1="52" y1="176" x2="668" y2="176" stroke="#E4E4DE"/>
+      <line x1="52" y1="56" x2="52" y2="176" stroke="#E4E4DE"/>
+      <text x="46" y="59" font-size="9.5" fill="#9A9C96" text-anchor="end" font-family="ui-monospace,monospace">40</text>
+      <text x="46" y="119" font-size="9.5" fill="#9A9C96" text-anchor="end" font-family="ui-monospace,monospace">20</text>
+      <text x="46" y="179" font-size="9.5" fill="#9A9C96" text-anchor="end" font-family="ui-monospace,monospace">0</text>
+      <line x1="52" y1="116" x2="668" y2="116" stroke="#F0F0EB"/>
+
+      <!-- 柱：值/40*120 -->
+      <rect x="60" y="62" width="64" height="114" fill="#A8622A"/>
+      <text x="92" y="54" font-size="11.5" fill="#141519" text-anchor="middle" font-family="ui-monospace,monospace">38.0</text>
+      <text x="92" y="194" font-size="10" fill="#71737A" text-anchor="middle">block 1</text>
+      <text x="92" y="207" font-size="9.5" fill="#9A9C96" text-anchor="middle">2048→1024</text>
+
+      <rect x="166" y="85" width="64" height="91" fill="#B7794B"/>
+      <text x="198" y="77" font-size="11.5" fill="#141519" text-anchor="middle" font-family="ui-monospace,monospace">30.4</text>
+      <text x="198" y="194" font-size="10" fill="#71737A" text-anchor="middle">block 2</text>
+      <text x="198" y="207" font-size="9.5" fill="#9A9C96" text-anchor="middle">1024→512</text>
+
+      <rect x="272" y="117" width="64" height="59" fill="#C9A488"/>
+      <text x="304" y="109" font-size="11.5" fill="#141519" text-anchor="middle" font-family="ui-monospace,monospace">19.8</text>
+      <text x="304" y="194" font-size="10" fill="#71737A" text-anchor="middle">block 3</text>
+      <text x="304" y="207" font-size="9.5" fill="#9A9C96" text-anchor="middle">512→256</text>
+
+      <rect x="378" y="148" width="64" height="28" fill="#DCC3AE"/>
+      <text x="410" y="140" font-size="11.5" fill="#141519" text-anchor="middle" font-family="ui-monospace,monospace">9.2</text>
+      <text x="410" y="194" font-size="10" fill="#71737A" text-anchor="middle">block 4</text>
+      <text x="410" y="207" font-size="9.5" fill="#9A9C96" text-anchor="middle">256→128</text>
+
+      <rect x="484" y="147" width="64" height="29" fill="#DCC3AE"/>
+      <text x="516" y="139" font-size="11.5" fill="#141519" text-anchor="middle" font-family="ui-monospace,monospace">9.6</text>
+      <text x="516" y="194" font-size="10" fill="#71737A" text-anchor="middle">block 5</text>
+      <text x="516" y="207" font-size="9.5" fill="#9A9C96" text-anchor="middle">128→64</text>
+
+      <rect x="590" y="186" width="0" height="0" fill="none"/>
+      <text x="598" y="150" font-size="10.5" fill="#71737A">前缀 26.9</text>
+      <text x="598" y="163" font-size="9.5" fill="#9A9C96">model.0/1</text>
+    </svg>
+    <p class="figcap">
+      20 个 patch 整段解码的累计曲线做差分。序列越短，单位成本越高：block 1 要在 32 帧上跑 2048→1024 的转置卷积，
+      block 5 在 3840 帧上跑 128→64，后者数据量更大却更便宜——因为 GPU 终于被喂饱了。
+    </p>
+  </div>
+  <p>
+    用权重形状反算 MAC，再除以实测时间，得到各区间的有效吞吐：<b>12 → 24 GFLOP/s</b>（序列越长越高），
+    而 M2 Max 的 FP16 峰值在 10 TFLOPS 量级。也就是说这块 VAE 只用到 GPU 的 <b>0.2%–2%</b>。
+    CPU 对照更能说明问题：CFM 在 Metal 上快 6.3 倍，而 VAE 只快 2.4 倍（320 ms → 132 ms）。
+  </p>
+  <p>
+    日志里能直接看到元凶之一：<code>kernel_conv_transpose_1d_f32_f32</code>。转置卷积没有走 GEMM，
+    而是朴素 kernel —— 每个输出点自己在内层循环里遍历输入通道。六层转置卷积恰好是 block 1/2 成本最高的部分。
+  </p>
+</section>
+
+<section>
+  <h2>四个被证伪的直觉</h2>
+  <ol class="findings">
+    <li>
+      <h4>「每帧重建 VAE 图，开销肯定很大」</h4>
+      <p>实测建图 0.15 ms、graph 分配器 4.6 ms。就算把整条图缓存下来，每帧也只省 2–3%。而 VAE compute 一项就是 162 ms。</p>
+      <span class="ev">build=0.15 ms · alloc=4.6 ms · compute=162.0 ms · read=0.02 ms</span>
+    </li>
+    <li>
+      <h4>「im2col 走 F32，矩阵乘落到了 f16×f32 慢路径」</h4>
+      <p>改成 F16 后日志确实从 <code>mul_mm_f16_f32</code> 变为 <code>mul_mm_f16_f16</code>，但耗时纹丝不动（162 vs 162 ms）。说明瓶颈不在矩阵乘的精度路径上。既然没有收益，默认值已回退成 F32，不拿精度换空气。</p>
+      <span class="ev">CHUNK=4：F32 最大差 31 LSB / SNR 63.3 dB ← 保留 F32 后仍是这个量级</span>
+    </li>
+    <li>
+      <h4>「批量放大就能摊薄开销」</h4>
+      <p>整段解码 4 / 8 / 20 / 32 个 patch，<b>平均每个 patch 的成本恒定在 134–140 ms</b>。开销不是固定值，而是严格正比于音频长度。所以「一次多解几帧」不会让总量下降，只能提高单位吞吐。</p>
+      <span class="ev">138.4 → 136.1 → 133.9 → 139.6 ms / patch</span>
+    </li>
+    <li>
+      <h4>「量化 BaseLM 到 Q8_0 能提速」</h4>
+      <p>BaseLM 在每帧里只占 5.8 ms（2.4%）。之前测到 Q8_0 与 F16 速度无差别，原因不是量化失效，而是它加速的那一段根本不影响总时长。Q8_0 的价值在于省 1.9 GB 内存，不在速度。</p>
+      <span class="ev">BaseLM 5.8 ms ↔ 总 238 ms</span>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>已经落地的改动：攒批解码</h2>
+  <p>
+    VAE 的吞吐随序列长度上升（134 ms @ 32 patch vs 167 ms @ 1 patch），所以把连续几个 patch 塞进同一张图是有收益的。
+    改动只有一处：<b>首块仍然单独解码</b>（首包延迟完全不变），之后按 <code>VOXCPM2_CHUNK_PATCHES</code> 攒批。
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>VAE 每图 patch 数</th><th class="num">短句 24 字 RTF</th><th class="num">长句 76 字 RTF</th><th class="num">首包</th><th>波形 vs 逐帧</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1（原行为）</td><td class="num">1.605</td><td class="num">1.835</td><td class="num">302 ms</td><td>基准</td></tr>
+        <tr><td>2</td><td class="num">1.512</td><td class="num">1.746</td><td class="num">310 ms</td><td><b>0 LSB，逐样本一致</b></td></tr>
+        <tr class="best"><td><b>4（当前默认）</b></td><td class="num"><b>1.33–1.45</b></td><td class="num"><b>1.34–1.45</b></td><td class="num">294–316 ms</td><td>最大 31 LSB，SNR 63.3 dB</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="bars" style="margin:24px 0 8px">
+    <div class="bar-row">
+      <span class="bar-label">1 patch</span>
+      <div class="bar-track"><div class="bar-fill f-1" style="width:100%"></div></div>
+      <span class="bar-val">1.835</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">2 patch</span>
+      <div class="bar-track"><div class="bar-fill f-2" style="width:95.1%"></div></div>
+      <span class="bar-val">1.746</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">4 patch</span>
+      <div class="bar-track"><div class="bar-fill f-4" style="width:72.8%"></div></div>
+      <span class="bar-val">1.335</span>
+    </div>
+  </div>
+  <p style="font-size:12.5px;color:var(--muted);margin-top:-2px">
+    长句 76 字，服务态，timesteps=10。首次测量 CHUNK=4 在 1.33–1.45 间波动（机器上还跑着 MLX 与 PyTorch 服务），
+    所以给区间而不是单值；方向与量级在 CLI 与 HTTP 两种口径下一致。
+  </p>
+  <div class="callout">
+    <b>为什么 2 是 0 LSB、4 就有 63 dB 的差别？</b>
+    数学上 VAE 是纯因果卷积，攒批不改变计算语义。差异来自 GEMM 在不同 M 下选了不同分块，
+    浮点累加顺序不同。63 dB 的 SNR 在语音上听不出来，ASR 回环的 CER 也仍是 <b>0%</b>。
+    如果要求严格可复现，用 <code>GGUF_CHUNK_PATCHES=2</code>，代价是收益从 20% 掉到 5%。
+  </div>
+</section>
+
+<section>
+  <h2>另一条省钱路：少走几步扩散</h2>
+  <p>
+    CFM 是每帧里第二大的开销，且对步数严格线性。降步数能直接换时间，但会动音质，所以要配 ASR 回环看：
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>timesteps</th><th class="num">RTF</th><th class="num">相对 10 步</th><th class="num">RMS</th><th class="num">CER</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>10（默认）</td><td class="num">1.503</td><td class="num">—</td><td class="num">0.119</td><td class="num">0.00%</td></tr>
+        <tr class="best"><td><b>8</b></td><td class="num"><b>1.420</b></td><td class="num">−5.5%</td><td class="num">0.116</td><td class="num">0.00%</td></tr>
+        <tr><td>6</td><td class="num">1.340</td><td class="num">−10.8%</td><td class="num">0.070</td><td class="num">0.00%</td></tr>
+        <tr><td>4</td><td class="num">1.261</td><td class="num">−16.1%</td><td class="num">0.061</td><td class="num">0.00%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    可懂度全程没掉（CER 都是 0），但 RMS 从 0.119 掉到 0.070 —— 能量变弱、听感发闷是扩散步数不足的典型表现。
+    <b>推荐 8</b>：省 5.5%，波形指标几乎不动。6 步以下不建议做默认，除非你能接受音色变薄。
+  </p>
+  <p>两项叠加（攒批 4 + 8 步），服务态实测短句 <b>RTF 1.29</b>、首包 <b>283 ms</b>，是本轮调参能到的位置。</p>
+</section>
+
+<section>
+  <h2>再往前，就不是调参了</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>方向</th><th>具体做什么</th><th class="num">预估收益</th><th>代价</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>立刻可用</td><td>攒批 4 + timesteps 8（已落地）</td><td class="num">RTF −20%~25%</td><td>无，重启生效</td></tr>
+        <tr><td>低风险 micro-opt</td><td>去掉 conv 后的 <code>permute+cont</code> 全量转置、合并 snake 的 <code>repeat</code> 与大张量加法</td><td class="num">5%~15%</td><td>要改 VAE 布局约定，需逐层回归</td></tr>
+        <tr class="best"><td><b>根治</b></td><td><b>把 6 层转置卷积从朴素 kernel 改成「相位分解 + GEMM」</b>，MAC 不变但能吃满 tile</td><td class="num"><b>VAE 2~3×</b></td><td>要写新图逻辑与重排 op，工作量按周计</td></tr>
+        <tr><td>绕开</td><td>VAE 交给 MLX（每帧约 40 ms），GGUF 只负责 LM + CFM</td><td class="num">RTF → 0.7</td><td>跨引擎传 latent，架构变脏</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    为什么说根治能到 2–3 倍：MLX 路线整条链 RTF 0.69，其中 LM + CFM 与 GGUF 同量级（约 70 ms），
+    反推它的 VAE 每帧只要 40 ms 左右。<b>同一个模型、同一块 GPU，差 3–4 倍，差距全在算子实现上</b>，不在模型。
+  </p>
+  <div class="callout warn">
+    <b>诚实的结论：</b>调参的天花板由 VAE 决定。攒批 + 降步数能把 RTF 从 1.6–1.8 压到 1.29 左右，
+    但要让长文本真正跑到实时线以内（RTF &lt; 1），必须动 <code>voxcpm2_audiovae.cpp</code> 里的卷积实现。
+    在此之前，GGUF 更适合当「C++ 单进程、无 Python 依赖、内存省」的离线批量引擎，实时流式仍是 MLX 的主场。
+  </div>
+</section>
+
+<section>
+  <h2>复现方式</h2>
+  <pre><span class="c"># 1. 分段计时（每帧拆到 LM / CFM / VAE，含 VAE 内部的 build/alloc/compute）</span>
+VOXCPM2_PROF=1 ./build-metal/bin/voxcpm2-cli -t "本地语音合成系统的响应速度。" \
+    --stream --timesteps 10 gguf-models/VoxCPM2-BaseLM-Q8_0.gguf \
+    gguf-models/VoxCPM2-Acoustic-F16.gguf
+
+<span class="c"># 2. 逐 block 截断，量每个 decoder block 的边际成本</span>
+VOXCPM2_VAE_UNTIL=3 VOXCPM2_PROF=1 ./build-metal/bin/voxcpm2-cli -t "..." --steps 20 ...
+
+<span class="c"># 3. 攒批对比（服务态只需改环境变量，首块始终单独出）</span>
+VOXCPM2_CHUNK_PATCHES=1|2|4 ./build-metal/bin/llama-tts-server --voxcpm2-base-lm ... --port 8819
+
+<span class="c"># 4. 服务态首包 / RTF（自动绕过本机代理）</span>
+.venv/bin/python bench_live.py 8819 10
+
+<span class="c"># 5. 可懂度回环</span>
+.venv/bin/python asr_one.py out.wav "参考文本"</pre>
+  <p style="font-size:13px;color:var(--muted)">
+    改动文件：<code>voxcpm2_runtime.cpp</code>（分段打点、<code>decode_patches_streaming</code> 攒批、<code>VOXCPM2_VAE_UNTIL</code>）、
+    <code>voxcpm2_audiovae.cpp</code>（im2col 精度开关）、<code>webapp/start.sh</code>（<code>GGUF_CHUNK_PATCHES</code> 默认 4）。
+    打点默认关闭，只有在设了 <code>VOXCPM2_PROF</code> 时才走计时分支。
+  </p>
+</section>
+
+<section>
+  <h2>这份结论的边界</h2>
+  <ul>
+    <li>数字来自 <b>M2 Max + Metal</b>。上独显或用 CUDA 时，转置卷积的相对成本会变，攒批的最优点也可能偏移（可以扫 2/4/8）。</li>
+    <li>RTF 在服务态有 <b>±8% 波动</b>（同机还跑着 MLX 与 PyTorch 两个常驻引擎），所以给区间不给单值；所有对比都是同口径、同机器连续测。</li>
+    <li>CER 只能证明「可懂」，证明不了「好听」。timesteps 6/4 的 CER 虽是 0，RMS 已明显下滑，选型时别只看 CER。</li>
+    <li>block 级拆分靠截断实现，截断后 tail 仍会构建，所以前缀那 26.9 ms 含 final conv，不能当成单个 block 的成本。</li>
+  </ul>
+</section>
+
+<footer>
+  <p>VoxCPM2 · GGUF 路线效率研究 · 2026-11-10 · 全部数字为本机实测，可在仓库内用上述命令复跑</p>
+  <p>口径：RTF = 生成耗时 ÷ 音频时长；大于 1 即慢于实时。内存取 <code>ri_phys_footprint</code>。</p>
+</footer>
+
+</div>
+</body>
+</html>

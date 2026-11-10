@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxCPM2 三条推理路线实测对比 · PyTorch / MLX / GGUF</title>
+<style>
+  :root{
+    --bg:#F7F7F4; --card:#FFFFFF; --ink:#141519; --ink2:#3B3D44; --muted:#71737A;
+    --line:#E4E4DE; --line2:#EFEFEA;
+    --pt:#4C5B73; --mlx:#2F6F5B; --gguf:#A8622A;
+    --pt-bg:#EEF0F4; --mlx-bg:#EAF1EE; --gguf-bg:#F7EDE4;
+    --r:3px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,"SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    font-size:15px;line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:56px 32px 96px}
+  code,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* ---------- 页头 ---------- */
+  header{border-bottom:1px solid var(--line);padding-bottom:32px;margin-bottom:44px}
+  .kicker{
+    font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 16px;
+  }
+  h1{
+    font-size:38px;line-height:1.22;letter-spacing:-.02em;font-weight:650;
+    margin:0 0 18px;max-width:24ch;
+  }
+  .sub{font-size:16px;color:var(--ink2);max-width:66ch;margin:0 0 26px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px 28px;font-size:12px;color:var(--muted)}
+  .meta-row b{color:var(--ink2);font-weight:600}
+
+  /* ---------- 章节 ---------- */
+  section{margin:0 0 56px}
+  h2{
+    font-size:12px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  h3{font-size:17px;font-weight:640;letter-spacing:-.01em;margin:32px 0 10px}
+  p{margin:0 0 14px;max-width:74ch}
+  ul,ol{margin:0 0 16px;padding-left:22px;max-width:74ch}
+  li{margin:6px 0}
+  strong{font-weight:640}
+  a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+  a:hover{border-bottom-color:var(--ink)}
+
+  /* ---------- 结论卡 ---------- */
+  .verdict{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin:0 0 20px;
+  }
+  .verdict > div{background:var(--card);padding:20px 20px 22px;display:flex;flex-direction:column}
+  .verdict .tag{
+    display:inline-block;font-size:10px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 8px;border-radius:2px;margin-bottom:12px;
+  }
+  .t-pt{background:var(--pt-bg);color:var(--pt)}
+  .t-mlx{background:var(--mlx-bg);color:var(--mlx)}
+  .t-gguf{background:var(--gguf-bg);color:var(--gguf)}
+  .verdict h4{margin:0 0 6px;font-size:15px;font-weight:640;letter-spacing:-.01em}
+  .verdict p{margin:0;font-size:13px;color:var(--ink2);line-height:1.65}
+  .verdict .big{
+    font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:auto;
+    padding-top:12px;border-top:1px solid var(--line2);
+  }
+  .verdict .big b{color:var(--ink);font-weight:600}
+
+  .callout{
+    background:var(--card);border:1px solid var(--line);border-left:3px solid var(--ink);
+    border-radius:var(--r);padding:18px 22px;margin:22px 0;font-size:14px;color:var(--ink2);
+  }
+  .callout b{color:var(--ink)}
+
+  /* ---------- 表格 ---------- */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line2);vertical-align:top}
+  thead th{
+    font-size:10.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    background:#FBFBF9;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  thead th:nth-child(2){color:var(--pt)}
+  thead th:nth-child(3){color:var(--mlx)}
+  thead th:nth-child(4){color:var(--gguf)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody th{font-weight:500;color:var(--muted);font-size:12.5px;white-space:nowrap;width:150px}
+  td b{font-weight:640}
+  .best{background:#F2F7F4}
+  .num{font-size:12.5px}
+  .pill{
+    display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;
+    padding:2px 6px;border-radius:2px;background:var(--line2);color:var(--ink2);
+  }
+
+  /* ---------- 图表 ---------- */
+  .charts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:26px 0 8px}
+  .chart{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 18px 14px}
+  .chart h5{
+    margin:0 0 2px;font-size:12.5px;font-weight:640;letter-spacing:-.01em;
+  }
+  .chart .cap{font-size:11px;color:var(--muted);margin:0 0 16px}
+  .bars{display:flex;flex-direction:column;gap:12px}
+  .bar-row{display:grid;grid-template-columns:38px 1fr 56px;align-items:center;gap:9px}
+  .bar-label{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .bar-track{height:9px;background:var(--line2);border-radius:2px;overflow:visible;position:relative}
+  .bar-fill{height:100%;border-radius:2px}
+  .bar-val{font-family:var(--mono);font-size:11.5px;color:var(--ink2);text-align:right}
+  .f-pt{background:var(--pt)} .f-mlx{background:var(--mlx)} .f-gguf{background:var(--gguf)}
+  /* 阈值刻度：竖直虚线，画在条形内部，不会压到右侧数值 */
+  .bar-track .thr{
+    position:absolute;top:-3px;bottom:-3px;width:0;border-left:1px dashed #9A9C96;
+  }
+  .chart-note{font-size:11px;color:var(--muted);margin:16px 0 0;line-height:1.6}
+  .chart-note em{font-style:normal;color:var(--ink2);font-weight:600}
+
+  /* ---------- 架构图 ---------- */
+  .figure{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px 20px 16px;margin:24px 0}
+  .figure svg{display:block;width:100%;height:auto}
+  .figcap{font-size:11.5px;color:var(--muted);margin:14px 4px 0;line-height:1.65}
+
+  /* ---------- 发现列表 ---------- */
+  .findings{counter-reset:f;margin:0;padding:0;list-style:none}
+  .findings li{
+    counter-increment:f;position:relative;padding:20px 0 20px 46px;border-bottom:1px solid var(--line);
+    margin:0;max-width:none;
+  }
+  .findings li:first-child{border-top:1px solid var(--line)}
+  .findings li::before{
+    content:counter(f,decimal-leading-zero);position:absolute;left:0;top:20px;
+    font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em;
+  }
+  .findings h4{margin:0 0 6px;font-size:15px;font-weight:640;letter-spacing:-.01em}
+  .findings p{margin:0;font-size:13.5px;color:var(--ink2);max-width:76ch}
+  .findings .ev{
+    font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:8px;
+    display:block;
+  }
+
+  /* ---------- 代码 ---------- */
+  pre{
+    background:#FBFBF9;border:1px solid var(--line);border-radius:var(--r);
+    padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.7;
+    color:var(--ink2);margin:14px 0 18px;
+  }
+  pre .c{color:#8C8E95}
+
+  /* ---------- 页脚 ---------- */
+  footer{border-top:1px solid var(--line);margin-top:64px;padding-top:24px;font-size:12px;color:var(--muted)}
+  footer p{margin:0 0 6px;max-width:none}
+
+  @media (max-width:820px){
+    .wrap{padding:36px 20px 64px}
+    h1{font-size:28px}
+    .verdict{grid-template-columns:1fr}
+    .charts{grid-template-columns:1fr}
+  }
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none;padding:0}
+    section{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="kicker">实测报告 · 2026-11-10</p>
+  <h1>VoxCPM2 的三条推理路线：PyTorch、MLX、GGUF</h1>
+  <p class="sub">
+    同一台机器、同一份权重、同一段文本，把三条技术路线都跑通并接到同一个 Web 应用里。
+    结论不是「谁最强」，而是<b>三条路各自赢在不同的指标上</b>：MLX 赢在吞吐，GGUF 赢在首包与内存，PyTorch 赢在不用折腾。
+  </p>
+  <div class="meta-row">
+    <span>机器 <b>Apple M2 Max / 64 GB / macOS 26.5</b></span>
+    <span>模型 <b>VoxCPM2 2.3B</b></span>
+    <span>采样率 <b>48 kHz</b></span>
+    <span>参数 <b>cfg 2.0 / steps 10 / seed 42</b></span>
+  </div>
+</header>
+
+<section>
+  <h2>结论先行</h2>
+  <div class="verdict">
+    <div>
+      <span class="tag t-mlx">MLX 8bit</span>
+      <h4>综合最优，设为默认</h4>
+      <p>RTF 0.83 最快，内存 3.1 GB，加载 0.2–0.7 秒。真流式且节奏快于实时，播放不卡。</p>
+      <div class="big">RTF <b>0.83</b> · 内存 <b>3.12 GB</b> · 首包 <b>528 ms</b></div>
+    </div>
+    <div>
+      <span class="tag t-gguf">GGUF Q8_0</span>
+      <h4>首包与内存最优，吞吐最差</h4>
+      <p>首包 301–362 ms 全场最快，内存 3.27 GB 且完全稳定，CER 0%。但整体比 MLX 慢 1.6 倍，流式节奏慢于实时。</p>
+      <div class="big">RTF <b>1.33</b> · 内存 <b>3.27 GB</b> · 首包 <b>331 ms</b></div>
+    </div>
+    <div>
+      <span class="tag t-pt">PyTorch fp32</span>
+      <h4>最稳但最重，留作兜底</h4>
+      <p>唯一不引入新运行时的一条路，质量与 GGUF 并列最好。代价是 11.6 GB 常驻和 90 秒级冷启动。</p>
+      <div class="big">RTF <b>1.04</b> · 内存 <b>11.64 GB</b> · 首包 <b>835 ms</b></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>一句话总结：</b>如果你只想要一个引擎，选 MLX。如果你在意「点下去多久出声」和内存占用，
+    GGUF 的首包比 MLX 快 37%、内存持平、音质更好——但它一旦开始流式播放就会因为生成慢于实时而出现断点，
+    所以它更适合「整段生成 + 一次性返回」，而不是边生成边听。
+  </div>
+</section>
+
+<section>
+  <h2>三条路线到底差在哪</h2>
+  <p>
+    三者的模型结构完全一致（BaseLM → ResidualLM → FSQ → LocDiT/CFM → AudioVAE），差别全在<b>用什么把矩阵乘法喂给 GPU</b>、
+    <b>权重以什么精度存放</b>、以及<b>谁来实现这个 2.3B 的推理循环</b>。
+  </p>
+
+  <div class="figure">
+    <svg viewBox="0 0 1000 268" role="img" aria-label="三条推理路线的数据流对比">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#B9BBB4"/>
+        </marker>
+      </defs>
+
+      <!-- 行标签 -->
+      <text x="0" y="60" font-size="11" font-weight="650" letter-spacing="1.4" fill="#4C5B73">PYTORCH</text>
+      <text x="0" y="128" font-size="11" font-weight="650" letter-spacing="1.4" fill="#2F6F5B">MLX</text>
+      <text x="0" y="196" font-size="11" font-weight="650" letter-spacing="1.4" fill="#A8622A">GGUF</text>
+
+      <!-- 行 1 PyTorch -->
+      <rect x="90" y="38" width="196" height="44" rx="3" fill="#EEF0F4" stroke="#D8DCE4"/>
+      <text x="104" y="57" font-size="12" font-weight="600" fill="#24262B">safetensors · BF16</text>
+      <text x="104" y="72" font-size="10.5" fill="#6B6E76">4.6 GB，MPS 上转 FP32</text>
+      <line x1="290" y1="60" x2="316" y2="60" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="320" y="38" width="196" height="44" rx="3" fill="#FFFFFF" stroke="#D8DCE4"/>
+      <text x="334" y="57" font-size="12" font-weight="600" fill="#24262B">voxcpm · Python</text>
+      <text x="334" y="72" font-size="10.5" fill="#6B6E76">自研 SDPA + 手写 KV cache</text>
+      <line x1="520" y1="60" x2="546" y2="60" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="550" y="38" width="196" height="44" rx="3" fill="#FFFFFF" stroke="#D8DCE4"/>
+      <text x="564" y="57" font-size="12" font-weight="600" fill="#24262B">PyTorch 2.15 · MPS</text>
+      <text x="564" y="72" font-size="10.5" fill="#6B6E76">torch.compile 仅 CUDA 生效</text>
+      <line x1="750" y1="60" x2="776" y2="60" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="780" y="38" width="196" height="44" rx="3" fill="#F4F5F7" stroke="#D8DCE4"/>
+      <text x="794" y="57" font-size="12" font-weight="600" fill="#24262B">PCM 48 kHz</text>
+      <text x="794" y="72" font-size="10.5" fill="#6B6E76">常驻 11.6 GB · RTF 1.04</text>
+
+      <!-- 行 2 MLX -->
+      <rect x="90" y="106" width="196" height="44" rx="3" fill="#EAF1EE" stroke="#CFE0D8"/>
+      <text x="104" y="125" font-size="12" font-weight="600" fill="#24262B">8bit + BF16/FP32 混合</text>
+      <text x="104" y="140" font-size="10.5" fill="#6B6E76">3.0 GB，只压两个语言模型</text>
+      <line x1="290" y1="128" x2="316" y2="128" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="320" y="106" width="196" height="44" rx="3" fill="#FFFFFF" stroke="#CFE0D8"/>
+      <text x="334" y="125" font-size="12" font-weight="600" fill="#24262B">mlx-audio 重写版</text>
+      <text x="334" y="140" font-size="10.5" fill="#6B6E76">1945 行 Python，含自研分块流式</text>
+      <line x1="520" y1="128" x2="546" y2="128" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="550" y="106" width="196" height="44" rx="3" fill="#FFFFFF" stroke="#CFE0D8"/>
+      <text x="564" y="125" font-size="12" font-weight="600" fill="#24262B">mlx 0.32 · mlx-metal</text>
+      <text x="564" y="140" font-size="10.5" fill="#6B6E76">mx.fast 融合 kernel，惰性求值</text>
+      <line x1="750" y1="128" x2="776" y2="128" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="780" y="106" width="196" height="44" rx="3" fill="#F2F7F4" stroke="#CFE0D8"/>
+      <text x="794" y="125" font-size="12" font-weight="600" fill="#24262B">PCM 48 kHz</text>
+      <text x="794" y="140" font-size="10.5" fill="#6B6E76">常驻 3.1 GB · RTF 0.83</text>
+
+      <!-- 行 3 GGUF -->
+      <rect x="90" y="174" width="196" height="44" rx="3" fill="#F7EDE4" stroke="#E4D2C0"/>
+      <text x="104" y="193" font-size="12" font-weight="600" fill="#24262B">GGUF · Q8_0 + F16</text>
+      <text x="104" y="208" font-size="10.5" fill="#6B6E76">1.6 GB + 1.7 GB，两个文件</text>
+      <line x1="290" y1="196" x2="316" y2="196" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="320" y="174" width="196" height="44" rx="3" fill="#FFFFFF" stroke="#E4D2C0"/>
+      <text x="334" y="193" font-size="12" font-weight="600" fill="#24262B">voxcpm2_runtime · C++</text>
+      <text x="334" y="208" font-size="10.5" fill="#6B6E76">llama.cpp-omni 移植，20 个源文件</text>
+      <line x1="520" y1="196" x2="546" y2="196" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="550" y="174" width="196" height="44" rx="3" fill="#FFFFFF" stroke="#E4D2C0"/>
+      <text x="564" y="193" font-size="12" font-weight="600" fill="#24262B">ggml · Metal</text>
+      <text x="564" y="208" font-size="10.5" fill="#6B6E76">手工调度，无 Python 推理依赖</text>
+      <line x1="750" y1="196" x2="776" y2="196" stroke="#B9BBB4" marker-end="url(#ar)"/>
+
+      <rect x="780" y="174" width="196" height="44" rx="3" fill="#F9F3EC" stroke="#E4D2C0"/>
+      <text x="794" y="193" font-size="12" font-weight="600" fill="#24262B">WAV / PCM 48 kHz</text>
+      <text x="794" y="208" font-size="10.5" fill="#6B6E76">常驻 3.27 GB · RTF 1.33</text>
+
+      <text x="0" y="252" font-size="10.5" fill="#8C8E95">三条路的模型结构完全相同，差别只在权重精度、算子的 GPU 实现、以及推理循环由谁来跑。</text>
+    </svg>
+    <p class="figcap">
+      图中体积均为磁盘权重实际字节数；内存为进程 <code>ri_phys_footprint</code> 实测（RSS 不含 Metal 显存，故不用 ps）。
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>同一段文本的三路实测</h2>
+  <p>
+    为了让 RTF 可比，下面这组数字都来自<b>同一段 35 字中文</b>、同参数（cfg 2.0 / steps 10 / seed 42），
+    经各自的服务进程（非常驻进程以外的冷启动已剔除）。表中「历史区间」是此前多轮测试的波动范围，用于说明单次测量的噪声。
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>指标</th>
+          <th>PyTorch fp32</th>
+          <th>MLX 8bit</th>
+          <th>GGUF Q8_0</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><th>运行时</th>
+          <td>PyTorch 2.15 + MPS</td>
+          <td>mlx 0.32.4 + mlx-metal</td>
+          <td>llama.cpp-omni（C++/ggml）</td></tr>
+        <tr><th>权重精度</th>
+          <td>BF16 存储，MPS 上强制 FP32 计算</td>
+          <td>BaseLM/ResLM 8bit，DiT BF16，VAE FP32</td>
+          <td>BaseLM Q8_0，声学部分 F16</td></tr>
+        <tr><th>磁盘体积</th>
+          <td class="num">4.6 GB</td>
+          <td class="num">3.0 GB</td>
+          <td class="num">3.3 GB<span class="pill" style="margin-left:6px">1.6 + 1.7</span></td></tr>
+        <tr><th>加载耗时</th>
+          <td class="num">90.9 s<span class="pill" style="margin-left:6px">暖盘 15 s</span></td>
+          <td class="num best">0.21–0.70 s</td>
+          <td class="num">0.87 s</td></tr>
+        <tr><th>RTF（同文本）</th>
+          <td class="num">1.04</td>
+          <td class="num best">0.83</td>
+          <td class="num">1.33</td></tr>
+        <tr><th>RTF（历史区间）</th>
+          <td class="num">0.85 – 1.50</td>
+          <td class="num">0.69 – 0.83</td>
+          <td class="num">1.33 – 1.53</td></tr>
+        <tr><th>流式首包</th>
+          <td class="num">790 – 880 ms</td>
+          <td class="num">528 ms</td>
+          <td class="num best">301 – 362 ms</td></tr>
+        <tr><th>常驻内存</th>
+          <td class="num">11.64 GB</td>
+          <td class="num best">3.12 GB</td>
+          <td class="num">3.27 GB</td></tr>
+        <tr><th>内存随请求增长</th>
+          <td class="num">稳定（12.3 GB 上下）</td>
+          <td class="num">稳定（修掉缓存问题后 3.1 GB）</td>
+          <td class="num">完全稳定（9 次请求 3.27→3.27）</td></tr>
+        <tr><th>真流式</th>
+          <td>是（模型自带 <code>generate_streaming</code>）</td>
+          <td>是（本项目自研分块解码，逐样本等价）</td>
+          <td>是（C++ 内置，160 ms 一块）</td></tr>
+        <tr><th>流式节奏</th>
+          <td>快于实时</td>
+          <td>快于实时</td>
+          <td><b style="color:#A8622A">慢于实时</b>：每 160 ms 音频要 240 ms 才到</td></tr>
+        <tr><th>ASR 回环 CER</th>
+          <td class="num best">0 %</td>
+          <td class="num">5.71 %<span class="pill" style="margin-left:6px">同音误识</span></td>
+          <td class="num best">0 %</td></tr>
+        <tr><th>Python 侧依赖</th>
+          <td>torch + transformers</td>
+          <td>mlx + tokenizers（+ 完整 mlx-audio）</td>
+          <td>不需要（服务是 C++ 二进制）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="charts">
+    <div class="chart">
+      <h5>RTF（越低越好）</h5>
+      <p class="cap">生成耗时 ÷ 音频时长</p>
+      <div class="bars">
+        <div class="bar-row"><span class="bar-label">PT</span>
+          <div class="bar-track"><div class="bar-fill f-pt" style="width:69%"></div><i class="thr" style="left:66.7%"></i></div>
+          <span class="bar-val">1.04</span></div>
+        <div class="bar-row"><span class="bar-label">MLX</span>
+          <div class="bar-track"><div class="bar-fill f-mlx" style="width:55%"></div><i class="thr" style="left:66.7%"></i></div>
+          <span class="bar-val">0.83</span></div>
+        <div class="bar-row"><span class="bar-label">GGUF</span>
+          <div class="bar-track"><div class="bar-fill f-gguf" style="width:89%"></div><i class="thr" style="left:66.7%"></i></div>
+          <span class="bar-val">1.33</span></div>
+      </div>
+      <p class="chart-note"><em>虚线 = 实时（RTF 1.0）</em>。GGUF 与 PyTorch 都越过了这条线，只有 MLX 稳定在实时以内。</p>
+    </div>
+
+    <div class="chart">
+      <h5>常驻内存</h5>
+      <p class="cap">进程 footprint</p>
+      <div class="bars">
+        <div class="bar-row"><span class="bar-label">PT</span>
+          <div class="bar-track"><div class="bar-fill f-pt" style="width:97%"></div></div>
+          <span class="bar-val">11.6 G</span></div>
+        <div class="bar-row"><span class="bar-label">MLX</span>
+          <div class="bar-track"><div class="bar-fill f-mlx" style="width:26%"></div></div>
+          <span class="bar-val">3.12 G</span></div>
+        <div class="bar-row"><span class="bar-label">GGUF</span>
+          <div class="bar-track"><div class="bar-fill f-gguf" style="width:27%"></div></div>
+          <span class="bar-val">3.27 G</span></div>
+      </div>
+      <p class="chart-note">两个轻量路线几乎持平，都比 PyTorch 省 <em>3.6 倍</em>。</p>
+    </div>
+
+    <div class="chart">
+      <h5>流式首包</h5>
+      <p class="cap">点击到第一块音频</p>
+      <div class="bars">
+        <div class="bar-row"><span class="bar-label">PT</span>
+          <div class="bar-track"><div class="bar-fill f-pt" style="width:93%"></div></div>
+          <span class="bar-val">835 ms</span></div>
+        <div class="bar-row"><span class="bar-label">MLX</span>
+          <div class="bar-track"><div class="bar-fill f-mlx" style="width:59%"></div></div>
+          <span class="bar-val">528 ms</span></div>
+        <div class="bar-row"><span class="bar-label">GGUF</span>
+          <div class="bar-track"><div class="bar-fill f-gguf" style="width:37%"></div></div>
+          <span class="bar-val">331 ms</span></div>
+      </div>
+      <p class="chart-note">GGUF 是唯一把首包压进 <em>400 ms</em> 的路线。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>五个值得记住的发现</h2>
+  <ol class="findings">
+    <li>
+      <h4>GGUF 的首包最快，因为它没有「先跑完再解码」的包袱</h4>
+      <p>
+        llama.cpp 的实现从一开始就是 patch 级流水：每生成 4 个 patch（160 ms 音频）就立刻解码并写出。
+        而 PyTorch 版要等自回归循环跑完才进 VAE，MLX 上游更是全文只有一个 <code>yield</code>。
+        本项目的 MLX 流式是后来自己拆出来重写的，才追到 528 ms。
+      </p>
+      <span class="ev">实测：GGUF 301–362 ms · MLX 528 ms · PyTorch 790–880 ms</span>
+    </li>
+    <li>
+      <h4>但 GGUF 的流式是「假实时」——首包快，后劲不足</h4>
+      <p>
+        每块音频 160 ms，但相邻两块到达间隔约 240 ms。这意味着浏览器每播完一块就要等 80 ms，
+        连续播放会出现规律性断点。它更适合「先拿首包做反馈、整段拿完再播」，
+        而不适合边生成边无缝播放。<b>这是本次对比里唯一一条会直接影响体感的硬缺陷。</b>
+      </p>
+      <span class="ev">实测分块到达：0.38 → 0.62 → 0.86 → 1.10 → 1.34 s，间隔 240 ms；音频 160 ms/块</span>
+    </li>
+    <li>
+      <h4>在 Metal 上，8bit 量化对 GGUF 几乎不提速，和 MLX 的结论相反</h4>
+      <p>
+        MLX 里 8bit 比 bf16 快 1.38 倍，因为 MLX 的量化 kernel 把反量化融进了矩阵乘。
+        GGUF 这边 Q8_0 反而略慢于 F16（1.40 vs 1.36），体积从 3.0 GB 降到 1.6 GB 却没换来速度——
+        反量化的开销吃掉了带宽收益。所以选 GGUF 时，<b>Q8_0 的价值是省内存，不是变快</b>。
+      </p>
+      <span class="ev">CLI 冷进程：Q8_0+F16 RTF 1.40/1.46 · F16+F16 RTF 1.36/1.39 · 两者常驻均 3.26 GB</span>
+    </li>
+    <li>
+      <h4>声学权重留在 F32 是纯亏</h4>
+      <p>
+        Acoustic 用 F32 会多占 1.8 GB（5.06 vs 3.26 GB），RTF 却没有任何改善（1.41 vs 1.40）。
+        原因是瓶颈在 CFM 的 10 步迭代上，精度不改变迭代次数。默认就选 F16。
+      </p>
+      <span class="ev">实测：Q8_0+F32 峰值 5.06 GB / RTF 1.42 · Q8_0+F16 峰值 3.26 GB / RTF 1.40</span>
+    </li>
+    <li>
+      <h4>音质上 GGUF 这一轮是三者最好的</h4>
+      <p>
+        同一段话做 ASR 回环，GGUF 与 PyTorch 都是 0% 错误，MLX 的 8bit 把「流式」听成了「刘氏」，
+        CER 5.71%。这与之前的结论一致：MLX 的误差集中在同音字上，属于 ASR 侧误识而非合成退化，
+        但在三者对比里仍然是 measurable 的差异。
+      </p>
+      <span class="ev">35 字中文，FunASR paraformer-zh 回环：PT 0% · MLX 5.71% · GGUF 0%</span>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>GGUF 这条路线是怎么落地的</h2>
+  <p>
+    社区里的 GGUF 方案指的是 <code>llama.cpp-omni</code> 这个 fork，它把 VoxCPM 系列（0.5B / 1.5 / 2）
+    用 C++ 重写进了 ggml，并自带 OpenAI 兼容的 <code>llama-tts-server</code>。四步走到可用：
+  </p>
+
+  <h3>1. 编译（Metal 后端）</h3>
+  <pre><span class="c"># ggml/CMakeLists.txt 在 Apple 上默认开 Metal</span>
+cmake -B build-metal -S . -DCMAKE_BUILD_TYPE=Release \
+      -DGGML_METAL=ON -DENABLE_COREML=OFF \
+      -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_OPENSSL=OFF
+
+cmake --build build-metal -j8 --target voxcpm2-cli llama-tts-server llama-quantize</pre>
+  <p>
+    三个目标分别是命令行、HTTP 服务和量化工具。整套编译只用到 Xcode 命令行工具，无需额外依赖。
+  </p>
+
+  <h3>2. 转换（PyTorch 权重 → GGUF）</h3>
+  <pre>python convert_voxcpm2_to_gguf.py \
+  --model models/VoxCPM2/model.safetensors \
+  --vae   models/VoxCPM2/audiovae.pth \
+  --config models/VoxCPM2/config.json \
+  --output gguf-models --dtype f32      <span class="c"># 量化必须先出 F32</span></pre>
+  <p>
+    转换器从 <code>config.json</code> 的 <code>architecture</code> 字段识别出 <code>voxcpm2</code>，
+    拆成两个文件：BaseLM（28 层、n_embd 2048、vocab 73448）与 Acoustic（ResLM 8 层 / LocEnc 12 层 / LocDiT 12 层 / FSQ dim 512），
+    并把 AudioVAE 的 weight_norm 合并后写进 Acoustic。耗时约 13 秒。
+  </p>
+
+  <h3>3. 量化</h3>
+  <pre>./build-metal/bin/llama-quantize \
+  gguf-models/VoxCPM2-BaseLM-F32.gguf \
+  gguf-models/VoxCPM2-BaseLM-Q8_0.gguf Q8_0
+
+<span class="c"># model size = 6188.07 MiB (32.00 BPW)  →  quant size = 1644.03 MiB (8.50 BPW)</span></pre>
+
+  <h3>4. 起服务并接进 Web 应用</h3>
+  <pre>./llama-tts-server \
+  --voxcpm2-base-lm gguf-models/VoxCPM2-BaseLM-Q8_0.gguf \
+  --voxcpm2-acoustic gguf-models/VoxCPM2-Acoustic-F16.gguf \
+  --host 127.0.0.1 --port 8819
+
+<span class="c"># OpenAI 兼容端点</span>
+POST /v1/audio/speech          <span class="c"># 整段 WAV</span>
+POST /v1/audio/speech/stream   <span class="c"># 44 字节 WAV 头 + 裸 PCM 分块</span>
+GET  /v1/audio/speech/models   <span class="c"># 模型是否就绪（含 sample_rate）</span></pre>
+
+  <p>
+    接入时有两个坑要处理：一是它的流式响应带 44 字节 WAV 头，得剥掉才能对齐另外两个引擎的裸 L16 口径；
+    二是 <code>/health</code> 恒返回 ok，不能用它判断就绪，得看 <code>/models</code> 是否返回非空列表。
+    主服务里的 <code>engine</code> 字段现在是三选一，GGUF 走 httpx 流式代理，结果照样落盘并写历史。
+  </p>
+</section>
+
+<section>
+  <h2>选型建议</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>场景</th><th>建议</th><th>理由</th></tr>
+      </thead>
+      <tbody>
+        <tr><th>Web 交互（默认）</th><td><b>MLX 8bit</b></td><td>唯一 RTF &lt; 1 的路线，流式不断点，加载 0.2–0.7 秒</td></tr>
+        <tr><th>极致首包 / 低内存</th><td><b>GGUF Q8_0</b></td><td>首包 331 ms，内存 3.27 GB 且长期完全稳定；接受整体慢 1.6 倍</td></tr>
+        <tr><th>批量离线合成</th><td><b>MLX 8bit</b></td><td>吞吐最高；GGUF 的 Q8_0 在此场景只剩内存优势</td></tr>
+        <tr><th>要给别人部署</th><td><b>GGUF</b></td><td>单二进制 + 两个权重文件，无 Python 推理依赖，最容易打包</td></tr>
+        <tr><th>不想引入新运行时</th><td><b>PyTorch</b></td><td>只要 torch 能跑就行，代价是 11.6 GB 内存</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout" style="border-left-color:#A8622A">
+    <b>诚实说明三处局限：</b>
+    ① GGUF 的「流式慢于实时」是从<b>分块到达间隔</b>推算的，没有做人工听感评估；
+    ② RTF 单次测量有 ±0.15 的波动（MPS 与 Metal 会互相抢 GPU），表里的区间比单值更可信；
+    ③ GGUF 的 0.87 秒加载是在权重已被系统页缓存的前提下测的，冷盘会更久。
+  </div>
+</section>
+
+<section>
+  <h2>复现</h2>
+  <pre><span class="c"># 全部引擎一键启动（PyTorch + MLX + GGUF）</span>
+./webapp/start.sh                 <span class="c"># → http://127.0.0.1:8817</span>
+
+<span class="c"># 只起某两个</span>
+MLX=0  ./webapp/start.sh
+GGUF=0 ./webapp/start.sh
+
+<span class="c"># 三路线基准</span>
+.venv/bin/python bench_gguf.py                    <span class="c"># CLI 冷进程口径</span>
+PID=$(lsof -tiTCP:8819 -sTCP:LISTEN) .venv/bin/python bench_gguf_server.py
+.venv/bin/python monitor_mem.py &lt;pid...&gt; -n 1        <span class="c"># 真实 footprint</span>
+
+<span class="c"># 端到端（真实 Chrome）</span>
+node webapp/verify_gguf.cjs</pre>
+</section>
+
+<footer>
+  <p>数据采集于 2026-11-10，Apple M2 Max / 64 GB / macOS 26.5。RTF 与内存均为本机实测，非厂商标称。</p>
+  <p>内存口径：<code>proc_pid_rusage(RUSAGE_INFO_V4).ri_phys_footprint</code>；CER 口径：FunASR paraformer-zh 回环。</p>
+</footer>
+
+</div>
+</body>
+</html>

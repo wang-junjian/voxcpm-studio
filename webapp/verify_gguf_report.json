@@ -1,0 +1,75 @@
+{
+  "url": "http://127.0.0.1:8817",
+  "steps": [
+    {
+      "step": "引擎控件",
+      "buttons": [
+        {
+          "engine": "mlx",
+          "pressed": "true",
+          "disabled": false
+        },
+        {
+          "engine": "gguf",
+          "pressed": "false",
+          "disabled": false
+        },
+        {
+          "engine": "torch",
+          "pressed": "false",
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "step": "切换到 GGUF",
+      "pressed": "true",
+      "hint": "GGUF Q8_0 · llama.cpp + Metal · 权重 3.3 GB · 真流式，首包约 1 秒。",
+      "spec": "GGUF Q8_0",
+      "status": "GGUF Q8_0 · Metal"
+    },
+    {
+      "step": "GGUF 一次性合成",
+      "engine": "GGUF Q8_0",
+      "dur": "8.32s",
+      "rtf": "1.44",
+      "sr": "48000 Hz",
+      "downloadHref": "/api/audio/226b11292251.wav",
+      "wallMs": 12564
+    },
+    {
+      "step": "GGUF 流式合成",
+      "firstChunkMs": 386,
+      "engine": "GGUF Q8_0",
+      "dur": "6.88s",
+      "rtf": "1.44",
+      "marks": {
+        "respMs": 15,
+        "firstChunkMs": 348
+      },
+      "blobReady": true,
+      "decoded": {
+        "dur": 6.88,
+        "sr": 44100,
+        "ch": 1
+      },
+      "tailRms": 0.11974,
+      "tailPeakRms": 0.2105
+    },
+    {
+      "step": "历史记录",
+      "count": 20,
+      "engs": [
+        "GGUF",
+        "PT",
+        "GGUF",
+        "MLX",
+        "GGUF",
+        "MLX"
+      ]
+    }
+  ],
+  "errors": [],
+  "known": [],
+  "ok": true
+}

@@ -1,0 +1,8 @@
+[transformers] You are using a model of type `voxcpm2` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+模型 models/VoxCPM2-8bit 加载 67.05s
+[基准] 一次性 16.32s 音频 / 10.92s 耗时 / RTF 0.67
+[等价性] 单块流式 vs generate(): 长度 783360/783368 SNR 175.1 dB 最大差 0.00e+00
+[分块 cp=16 ctx=16] 音频  16.32s 首包  1863ms 总 11.53s RTF 0.706 分块   7 解码 1.10s SNR  119.0 dB 最大差 5.3e-06
+[分块 cp= 8 ctx=16] 音频  16.32s 首包   972ms 总 11.61s RTF 0.711 分块  13 解码 1.67s SNR  108.3 dB 最大差 1.4e-05
+[分块 cp= 8 ctx= 8] 音频  16.32s 首包   952ms 总 11.50s RTF 0.704 分块  13 解码 1.59s SNR   43.1 dB 最大差 5.6e-02
+[分块 cp= 4 ctx=16] 音频  16.32s 首包   524ms 总 11.88s RTF 0.728 分块  26 解码 2.98s SNR  108.0 dB 最大差 1.4e-05

@@ -1,0 +1,86 @@
+{
+  "url": "http://127.0.0.1:8817",
+  "steps": [
+    {
+      "step": "引擎控件",
+      "buttons": [
+        {
+          "engine": "mlx",
+          "pressed": "true",
+          "disabled": false
+        },
+        {
+          "engine": "gguf",
+          "pressed": "false",
+          "disabled": false
+        },
+        {
+          "engine": "torch",
+          "pressed": "false",
+          "disabled": false
+        }
+      ],
+      "hint": "MLX 8bit · 权重 3.0 GB · RTF 0.73 · 真流式，首包约 0.5 秒。",
+      "status": "MLX 8bit · Metal"
+    },
+    {
+      "step": "切换到 MLX",
+      "pressed": "true",
+      "spec": "MLX 8bit",
+      "status": "MLX 8bit · Metal"
+    },
+    {
+      "step": "MLX 一次性合成",
+      "engine": "MLX 8bit",
+      "dur": "6.56s",
+      "rtf": "0.71",
+      "sr": "48000 Hz",
+      "downloadHref": "/api/audio/6208ecedcef3.wav",
+      "wallMs": 5248
+    },
+    {
+      "step": "波形像素",
+      "inked": 57028,
+      "total": 246272
+    },
+    {
+      "step": "MLX 流式合成",
+      "firstChunkMs": 575,
+      "engine": "MLX 8bit",
+      "dur": "7.04s",
+      "rtf": "0.72",
+      "marks": {
+        "respMs": 16,
+        "firstChunkMs": 562
+      },
+      "blobReady": true,
+      "decoded": {
+        "dur": 7.04,
+        "sr": 44100,
+        "ch": 1
+      },
+      "tailRms": 0.00169,
+      "tailPeakRms": 0.1116
+    },
+    {
+      "step": "历史记录",
+      "count": 20,
+      "engs": [
+        "MLX",
+        "GGUF",
+        "PT",
+        "GGUF",
+        "MLX",
+        "GGUF"
+      ]
+    },
+    {
+      "step": "PyTorch 引擎状态",
+      "disabled": false,
+      "title": ""
+    }
+  ],
+  "errors": [],
+  "known": [],
+  "ok": true
+}
