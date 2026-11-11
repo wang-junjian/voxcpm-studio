@@ -248,3 +248,63 @@ r 与「字数→音频秒」都由上一段流实测后缓存，`r ≥ 0.98` �
 
 界面「低延迟优先」开关可切回旧行为（记忆选择）。详见 [webapp/README.md](../webapp/README.md)。
 
+---
+
+## 整体搬移项目目录之后
+
+`mv` 整个项目（含权重与构建产物）到别的路径后，服务会起不来。三个地方各写死了一份绝对路径，症状各不相同，按顺序处理即可。
+
+### 1. GGUF 引擎：`Library not loaded: @rpath/...`（唯一会真的挂掉服务的）
+
+CMake 默认把构建目录的绝对路径写进 `LC_RPATH`，而二进制依赖的是 `@rpath/libllama-common.0.dylib` 这种相对形式。目录一搬，rpath 还指着旧路径，dyld 直接拒绝加载：
+
+```
+dyld: Library not loaded: @rpath/libllama-common.0.dylib
+  Reason: tried: '/旧路径/build-metal/bin/libllama-common.0.dylib' (no such file)
+```
+
+修法不是改成新绝对路径（下次搬还会坏），而是改成 **`@loader_path`**，让 dylib 相对可执行文件自己解析：
+
+```bash
+cd llamacpp-omni/llama.cpp-omni-master/build-metal/bin
+OLD=/旧/项目/路径/llamacpp-omni/llama.cpp-omni-master/build-metal/bin
+for f in *; do
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  otool -l "$f" | grep -q "$OLD" || continue
+  install_name_tool -rpath "$OLD" "@loader_path" "$f"
+  codesign --force --sign - "$f"        # arm64 改过 Mach-O 必须重签，否则被 kill
+done
+```
+
+验证：`otool -l bin/llama-tts-server | grep -A3 LC_RPATH` 应显示 `path @loader_path`，再直接 `./llama-tts-server --help` 能出帮助。
+
+> 注意只处理真实文件、跳过符号链接（`libggml.dylib` 这类是指向版本化文件的软链），否则同一个文件会被改两次而报错。
+
+### 2. venv：`pip` 等入口失效（`python` 不受影响）
+
+`.venv/bin/*` 里 console script 的 shebang 是绝对路径，`activate` 脚本也是。项目是直接用 `.venv/bin/python` 调的，所以服务能跑，只是 `pip` / `hf` / `llama-quantize` 这些入口会指向旧路径。
+
+```bash
+OLD=/旧/项目/路径; NEW=$(pwd)
+grep -rl "$OLD" .venv/bin mlxrun/.venv/bin | xargs sed -i '' "s|$OLD|$NEW|g"
+```
+
+### 3. cmake 缓存：只影响重新编译，不影响运行
+
+`build-metal/` 下有约 570 个文本文件（`CMakeCache.txt`、`build.make`、`link.txt`、`DependInfo.cmake`…）记着旧源码路径。二进制已经构建好了，所以运行时无所谓；但想增量编译就必须改，否则 CMake 认为自己被移动了、或找不到源文件。
+
+```bash
+python3 - <<'EOF'
+import pathlib
+OLD = b"/旧/项目/路径"; NEW = b"/新/项目/路径"
+for p in pathlib.Path("llamacpp-omni/llama.cpp-omni-master/build-metal").rglob("*"):
+    if not p.is_file() or p.is_symlink():
+        continue
+    b = p.read_bytes()
+    if OLD in b and b"\x00" not in b[:8192]:   # 跳过 .o / .a / 二进制
+        p.write_bytes(b.replace(OLD, NEW))
+EOF
+```
+
+`.o` / `.a` 里也有旧路径，但那是编译产物内部的调试信息，重新编译即覆盖，不用管。**实在拿不准就删掉 `build-metal` 重新 cmake**（按 [ASSETS.md](ASSETS.md) 第 3 步，几分钟）。
+

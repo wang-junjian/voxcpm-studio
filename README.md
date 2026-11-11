@@ -47,7 +47,7 @@ MLX 那 5.71% 是 ASR 把「整段」听成「诊段」造成的单字误识，�
 
 ## 快速开始
 
-> **仓库不含模型权重与编译产物**（约 29 GB）。首次运行请先按 [docs/ASSETS.md](docs/ASSETS.md) 重建资产，再回到这里。
+> **仓库不含模型权重、虚拟环境与编译产物**（约 31 GB，`.gitignore` 已全部排除）。这些目录就在项目根目录下，只是不进 git：克隆下来只有几十 MB，把自己那份权重填进同名路径即可。首次运行请先按 [docs/ASSETS.md](docs/ASSETS.md) 重建资产，再回到这里。
 
 ```bash
 git clone <this-repo> voxcpm-studio && cd voxcpm-studio
@@ -122,6 +122,20 @@ voxcpm-studio/
 ├── requirements.txt             主环境直接依赖（.lock.txt 为全量锁定）
 └── mlxrun/requirements.txt      MLX 环境直接依赖
 ```
+
+上面是**进 git 的部分**（约 26 MB）。下面这些同样在项目根目录下，但被 `.gitignore` 排除，需要自己重建（见 [docs/ASSETS.md](docs/ASSETS.md)）：
+
+```
+voxcpm-studio/
+├── gguf-models/                 16 GB   GGUF 权重（生产只用 Q8_0 + Acoustic-F16 共 3.3 GB）
+├── mlxrun/models/              7.6 GB   MLX 权重（8bit 3.0 GB 够用，bf16 是量化中间产物）
+├── models/VoxCPM2/             4.6 GB   PyTorch 权重，三条路线的共同底座
+├── .venv/                      2.0 GB   主环境（149 包）
+├── mlxrun/.venv/               584 MB   MLX 环境（38 包）
+└── llamacpp-omni/              304 MB   上游源码 + Metal 构建产物
+```
+
+代码里全部用相对路径引用它们（`gguf-models/...`、`mlxrun/models/VoxCPM2-8bit`），所以拿到一份完整目录直接 `./webapp/start.sh` 就能跑，不需要改任何配置；反过来，整个目录可以整体 `mv` 到别处（同一磁盘卷是原子 rename），只需修一次 venv 里 console script 的 shebang。
 
 ---
 
