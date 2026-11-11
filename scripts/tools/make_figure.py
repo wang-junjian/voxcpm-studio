@@ -1,15 +1,19 @@
 """生成验证结果总览图：5 段音频波形 + 关键指标。"""
-import os, json
+import os, json, sys
+from pathlib import Path
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import soundfile as sf
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
 plt.rcParams["font.sans-serif"] = ["PingFang SC", "Heiti SC", "Arial Unicode MS", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-OUT = "outputs"
+OUT = str(paths.OUTPUTS)
 items = [
     ("A_basic_zh", "A 基础中文 TTS", 1),
     ("B_voice_design", "B 音色设计", 1),

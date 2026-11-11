@@ -1,14 +1,16 @@
 """PyTorch/MPS 基线基准：与 bench_mlx.py 完全相同的文本与统计口径。"""
 import json
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
 # 沙箱里 tempfile 探测（写后删）会失败，torch/dill 因此无法导入，先钉死目录
-_HERE = os.path.dirname(os.path.abspath(__file__))
-tempfile.tempdir = os.path.join(_HERE, "tmpdir")
-os.makedirs(tempfile.tempdir, exist_ok=True)
+paths.pin_tempdir()
 
 import soundfile as sf  # noqa: E402
 from voxcpm import VoxCPM  # noqa: E402
@@ -18,13 +20,12 @@ TEXT_LONG = (
     "本地部署的语音合成系统，最关键的不是峰值效果，而是稳定性和响应速度。"
     "当模型常驻内存之后，用户点击生成的瞬间就可以开始出声，不必等待整段文本合成完毕。"
 )
-OUT = Path("outputs")
-OUT.mkdir(exist_ok=True)
+OUT = paths.ensure_dirs()
 
 
 def main():
     t0 = time.perf_counter()
-    model = VoxCPM.from_pretrained("models/VoxCPM2", load_denoiser=False)
+    model = VoxCPM.from_pretrained(str(paths.PYTORCH_MODEL), load_denoiser=False)
     load_s = time.perf_counter() - t0
     sr = model.tts_model.sample_rate
 
@@ -59,7 +60,7 @@ def main():
         "rtf_mean": round(sum(r["rtf"] for r in rows) / len(rows), 3),
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    Path("outputs/report_pt_fp32.json").write_text(
+    (paths.OUTPUTS / "report_pt_fp32.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 

@@ -1,10 +1,14 @@
 """ASR 回环验证：用 FunASR paraformer-zh 把生成音频转回文字，计算字错率 CER。"""
-import os, re, json, glob
+import os, re, json, glob, sys
+from pathlib import Path
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import numpy as np
 
-OUT_DIR = os.path.abspath("outputs")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+OUT_DIR = str(paths.ensure_dirs())
 report = json.load(open(os.path.join(OUT_DIR, "report.json"), encoding="utf-8"))
 
 PUNC = re.compile(r"[\s，。！？、；：\u201c\u201d\u2018\u2019（）()《》,.!?;:\"'\-—…·]")

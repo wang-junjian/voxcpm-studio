@@ -11,8 +11,9 @@ import argparse, os, time
 import numpy as np
 import torch, soundfile as sf
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "models", "VoxCPM2")
+import paths
+
+DEFAULT_MODEL = str(paths.PYTORCH_MODEL)
 
 
 def main():
@@ -52,7 +53,7 @@ def main():
                          inference_timesteps=args.steps, **kw)
     gen_s = time.time() - t
     wav = np.asarray(wav, dtype=np.float32).reshape(-1)
-    out = args.out or os.path.join(HERE, "outputs", f"tts_{int(time.time())}.wav")
+    out = args.out or str(paths.ensure_dirs() / f"tts_{int(time.time())}.wav")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     sf.write(out, wav, sr)
 

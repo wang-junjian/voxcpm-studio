@@ -1,12 +1,10 @@
 # 模型权重与构建产物（见 docs/ASSETS.md 重建）
-models/
-mlxrun/models/
-gguf-models/
+assets/
 llamacpp-omni/
 
 # 虚拟环境
 .venv/
-mlxrun/.venv/
+engines/mlx/.venv/
 **/node_modules/
 
 # Python
@@ -17,9 +15,11 @@ __pycache__/
 # 运行时产物
 webapp/runs/
 webapp/refs/
+engines/mlx/logs/
 outputs/
-mlxrun/outputs/
 tmpdir/
+*.log
+webapp/*_report.json
 
 # 音频与临时文件
 *.wav
@@ -29,3 +29,6 @@ tmpdir/
 # 编辑器
 .vscode/
 .idea/
+
+# 本地工作记录（不入库）
+.workbuddy/

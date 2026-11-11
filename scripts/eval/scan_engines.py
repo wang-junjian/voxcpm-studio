@@ -5,12 +5,17 @@ import os
 import subprocess
 import sys
 
+from pathlib import Path
+
 import httpx
 import numpy as np
 import wave
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
 BASE = os.environ.get("VOXCPM_BASE", "http://127.0.0.1:8817")
-ROOT = os.environ.get("VOXCPM_ROOT", os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("VOXCPM_ROOT") or str(paths.ROOT)
 TEXT = ("包含分段堆叠图、逐 block 边际成本柱图、四个证伪的原始数据、"
         "分层优化表和复现命令。")
 SEEDS = list(range(1, 17))

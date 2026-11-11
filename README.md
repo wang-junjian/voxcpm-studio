@@ -38,7 +38,7 @@ MLX 那 5.71% 是 ASR 把「整段」听成「诊段」造成的单字误识，�
     ▼
 主服务 server.py (8817, FastAPI)
     │  引擎选择 / 退化重试 / 响度归一 / 流式代理 / 历史管理
-    ├──────────────► MLX worker (8818)   stdlib HTTP，mlxrun/voxcpm_stream.py
+    ├──────────────► MLX worker (8818)   stdlib HTTP，engines/mlx/voxcpm_stream.py
     ├──────────────► GGUF server (8819)  llama.cpp-omni，llama-tts-server
     └──────────────► PyTorch 进程内     voxcpm 2.0.3，MPS + fp32
 ```
@@ -61,8 +61,8 @@ uv pip install --python .venv/bin/python -r requirements.txt
 #    （uv 会因构建产物删除被安全策略拦下而整体回滚，改用 pip 即可）
 
 # 2. MLX 环境（独立 venv，不能与主环境混装）
-python3.12 -m venv mlxrun/.venv
-mlxrun/.venv/bin/python -m pip install -r mlxrun/requirements.txt
+python3.12 -m venv engines/mlx/.venv
+engines/mlx/.venv/bin/python -m pip install -r engines/mlx/requirements.txt
 
 # 3. 启动（默认三个引擎全起）
 ./webapp/start.sh
@@ -93,18 +93,25 @@ GGUF_CHUNK_PATCHES=1 ./webapp/start.sh   # GGUF 逐 patch 解码，用于对照�
 
 ```
 voxcpm-studio/
+├── paths.py                     路径唯一真源：权重、二进制、输出目录都从这里取
+├── tts.py                       命令行单句合成入口
 ├── webapp/                      Web 主服务 + 单页前端 + 端到端自检
 │   ├── server.py                引擎路由、退化重试、响度归一、流式代理
 │   ├── start.sh                 一键拉起三进程（EXIT trap 联动回收）
 │   ├── static/index.html        单文件前端，零外部依赖
 │   ├── verify_*.cjs             Puppeteer 端到端断言脚本
 │   └── README.md                接口、参数、验证脚本清单
-├── mlxrun/                      MLX 8bit 引擎
+├── engines/mlx/                 MLX 8bit 引擎
 │   ├── voxcpm_stream.py         自研真流式 + LiteTokenizer
 │   ├── mlx_worker.py            stdlib HTTP worker（8818）
 │   ├── verify_stream.py         分块解码等价性验证（SNR / 逐样本）
 │   ├── bench_mlx.py             MLX 基准
 │   └── BENCH.md                 MLX 侧完整实测记录
+├── scripts/                     基准 / 验证 / 评测 / 排查，按用途分组
+│   ├── bench/                   bench_gguf、bench_gguf_server、bench_live、bench_pt
+│   ├── verify/                  smoke_test、verify_tts、test_extra
+│   ├── eval/                    asr_check、asr_one、scan_degenerate、scan_engines
+│   └── tools/                   monitor_mem、make_figure、measure_stream
 ├── extensions/llamacpp-omni/
 │   └── voxcpm2-perf.patch       对上游 llama.cpp-omni 的改动（打点 + 攒批解码）
 ├── docs/
@@ -114,31 +121,26 @@ voxcpm-studio/
 ├── tri-route-comparison.html    三路线对比报告（单文件、离线可读）
 ├── gguf-efficiency.html         GGUF 瓶颈定位与优化报告（单文件）
 ├── engineering-practice.html    工程实践复盘：定位、翻车、收口与方法论（单文件）
-├── tts.py                       模型 CLI（PyTorch 侧）
-├── bench_live.py                服务态基准（首包 / 断供 / RTF）
-├── bench_gguf*.py               GGUF 的 CLI 口径与服务态口径基准
-├── measure_stream.py            流式分块节奏测量（每块到达时刻与间隔）
-├── scan_degenerate.py           低能量样本命中率扫描（GGUF Q8_0 / F16）
-├── scan_engines.py              同上，MLX / PyTorch 对照
-├── asr_check.py / asr_one.py    ASR 回环 CER 评测（FunASR）
-├── monitor_mem.py               libproc 读物理内存（沙箱内 ps 被拦时的替代）
 ├── requirements.txt             主环境直接依赖（.lock.txt 为全量锁定）
-└── mlxrun/requirements.txt      MLX 环境直接依赖
+└── engines/mlx/requirements.txt MLX 环境直接依赖
 ```
 
 上面是**进 git 的部分**（约 26 MB）。下面这些同样在项目根目录下，但被 `.gitignore` 排除，需要自己重建（见 [docs/ASSETS.md](docs/ASSETS.md)）：
 
 ```
 voxcpm-studio/
-├── gguf-models/                 16 GB   GGUF 权重（生产只用 Q8_0 + Acoustic-F16 共 3.3 GB）
-├── mlxrun/models/              7.6 GB   MLX 权重（8bit 3.0 GB 够用，bf16 是量化中间产物）
-├── models/VoxCPM2/             4.6 GB   PyTorch 权重，三条路线的共同底座
-├── .venv/                      2.0 GB   主环境（149 包）
-├── mlxrun/.venv/               584 MB   MLX 环境（38 包）
-└── llamacpp-omni/              304 MB   上游源码 + Metal 构建产物
+├── assets/                       11 GB  所有模型权重，按引擎分目录
+│   ├── pytorch/VoxCPM2/          4.6 GB PyTorch 权重，三条路线的共同底座
+│   ├── mlx/VoxCPM2-8bit/         3.0 GB MLX 生产档
+│   └── gguf/                     3.3 GB GGUF 生产两档（Q8_0 + Acoustic-F16）
+├── .venv/                        2.0 GB 主环境（149 包）
+├── engines/mlx/.venv/            584 MB MLX 环境（38 包）
+└── llamacpp-omni/                304 MB 上游源码 + Metal 构建产物
 ```
 
-代码里全部用相对路径引用它们（`gguf-models/...`、`mlxrun/models/VoxCPM2-8bit`），所以拿到一份完整目录直接 `./webapp/start.sh` 就能跑，不需要改任何配置；反过来，整个目录可以整体 `mv` 到别处（同一磁盘卷是原子 rename），只需修一次 venv 里 console script 的 shebang。
+所有路径由 [paths.py](paths.py) 统一解析，默认值相对该文件定位，因此**在任何工作目录下运行结果一致**。权重换位置只改这一个文件，或用环境变量覆盖；直接运行 `python paths.py` 会打印当前解析结果并检查资产是否存在。
+
+`llamacpp-omni/` 刻意不搬进 `assets/`：那是 CMake 构建出的可执行，依赖同目录的 dylib 与 Metal shader，整体迁移会破坏查找路径。
 
 ---
 
@@ -229,7 +231,10 @@ BaseLM 只占 2.4%，所以 Q8_0 在 Metal 上不提速是必然的 —— 它�
 |---|---|---|
 | `MLX=0` / `GGUF=0` | 均启用 | 关闭对应引擎 |
 | `GGUF_CHUNK_PATCHES` | `4` | 传给 GGUF server |
-| `GGUF_BASE_LM` / `GGUF_ACOUSTIC` | `gguf-models/...` | 覆盖权重路径 |
+| `GGUF_BASE_LM` / `GGUF_ACOUSTIC` | `assets/gguf/...` | 覆盖权重路径 |
+| `VOXCPM_ASSETS` | `assets` | 权重根目录，换盘时指过去即可 |
+| `VOXCPM_MLX_MODEL` | `assets/mlx/VoxCPM2-8bit` | MLX 权重目录 |
+| `VOXCPM_PT_MODEL` | `assets/pytorch/VoxCPM2` | PyTorch 权重目录 |
 
 ---
 

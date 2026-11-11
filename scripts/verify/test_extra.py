@@ -1,10 +1,14 @@
 """补充验证：流式生成（首包延迟） + 声音克隆（用自生成音频作参考）。"""
-import os, time, json
+import os, sys, time, json
+from pathlib import Path
 import numpy as np
 import torch, soundfile as sf
 
-MODEL_DIR = os.path.abspath("models/VoxCPM2")
-OUT_DIR = os.path.abspath("outputs")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+MODEL_DIR = str(paths.PYTORCH_MODEL)
+OUT_DIR = str(paths.ensure_dirs())
 
 from voxcpm import VoxCPM
 t0 = time.time()

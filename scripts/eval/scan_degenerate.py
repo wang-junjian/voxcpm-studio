@@ -5,25 +5,31 @@ import re
 import subprocess
 import sys
 
-ROOT = os.environ.get("VOXCPM_ROOT", os.path.dirname(os.path.abspath(__file__)))
-BIN = os.environ.get(
-    "VOXCPM_GGUF_BIN",
-    f"{ROOT}/llamacpp-omni/llama.cpp-omni-master/build-metal/bin/voxcpm2-cli",
-)
-ACC = f"{ROOT}/gguf-models/VoxCPM2-Acoustic-F16.gguf"
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+ROOT = str(paths.ROOT)
+BIN = os.environ.get("VOXCPM_GGUF_BIN") or str(paths.GGUF_CLI_BIN)
+ACC = str(paths.GGUF_ACOUSTIC)
 TEXT = ("包含分段堆叠图、逐 block 边际成本柱图、四个证伪的原始数据、"
         "分层优化表和复现命令。")
 SEEDS = list(range(1, 17))
 TS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 MODELS = {
-    "Q8_0": f"{ROOT}/gguf-models/VoxCPM2-BaseLM-Q8_0.gguf",
-    "F16": f"{ROOT}/gguf-models/VoxCPM2-BaseLM-F16.gguf",
+    "Q8_0": str(paths.GGUF_BASE_LM),
+    "F16": str(paths.GGUF_BASE_LM_F16),
 }
 THRESH = 0.05  # RMS 低于此值视为退化（正常样本在 0.07–0.13）
 
 pat = re.compile(r"RMS=([0-9.]+), peak=([0-9.]+)")
 
 for tag, lm in MODELS.items():
+    if not Path(lm).exists():
+        # F16 是对照档，默认不保留；缺档跳过，需复跑时按 docs/ASSETS.md 重建
+        print(f"[{tag}] 权重不存在，跳过：{lm}\n", flush=True)
+        continue
     bad = []
     vals = []
     for s in SEEDS:

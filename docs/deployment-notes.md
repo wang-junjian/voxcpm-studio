@@ -2,6 +2,10 @@
 
 > 这是项目最初阶段的完整记录：环境搭建、5 个场景的实证验证、8 条踩坑。
 > 项目主页见 [../README.md](../README.md)，三路线对比见 [../tri-route-comparison.html](../tri-route-comparison.html)。
+>
+> **注意：目录已重组。** 本文正文里的命令是在旧布局下执行的，路径保留原貌作为历史记录
+> （`models/VoxCPM2` → `assets/pytorch/VoxCPM2`、`mlxrun/` → `engines/mlx/`、
+> `gguf-models/` → `assets/gguf/`）。要照着重建设备，请以 [ASSETS.md](ASSETS.md) 为准。
 
 OpenBMB VoxCPM2（2B 无分词器 TTS）在 Apple Silicon 上的离线部署与验证。
 
@@ -186,8 +190,8 @@ GGUF 为什么慢、慢在哪一层、还能优化多少，见
 BaseLM 只占 5.8 ms。已落地的改动是把连续 4 个 patch 攒进同一张 VAE 图解码（首块仍单独出、首包不变），
 服务态 RTF 从 1.6–1.8 降到 1.29–1.34；再往下必须改 `voxcpm2_audiovae.cpp` 里的转置卷积实现。
 
-`mlxrun/` 是 MLX 侧的实现与实测记录：8bit 量化权重（3.0 GB）、自研真流式（首包 0.53 s），详见 [mlxrun/BENCH.md](../mlxrun/BENCH.md)。
-`llamacpp-omni/` 是 GGUF 侧：llama.cpp-omni 的 Metal 构建（`voxcpm2-cli` / `llama-tts-server` / `llama-quantize`），权重转换与量化产物在 `gguf-models/`。
+`engines/mlx/` 是 MLX 侧的实现与实测记录：8bit 量化权重（3.0 GB，放在 `assets/mlx/`）、自研真流式（首包 0.53 s），详见 [engines/mlx/BENCH.md](../engines/mlx/BENCH.md)。
+`llamacpp-omni/` 是 GGUF 侧：llama.cpp-omni 的 Metal 构建（`voxcpm2-cli` / `llama-tts-server` / `llama-quantize`），权重转换与量化产物在 `assets/gguf/`。
 
 GGUF 侧新增的诊断开关（默认关闭，不影响生产路径）：
 
@@ -286,7 +290,7 @@ done
 
 ```bash
 OLD=/旧/项目/路径; NEW=$(pwd)
-grep -rl "$OLD" .venv/bin mlxrun/.venv/bin | xargs sed -i '' "s|$OLD|$NEW|g"
+grep -rl "$OLD" .venv/bin engines/mlx/.venv/bin | xargs sed -i '' "s|$OLD|$NEW|g"
 ```
 
 ### 3. cmake 缓存：只影响重新编译，不影响运行

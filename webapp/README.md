@@ -14,7 +14,7 @@ PORT=9000 ./webapp/start.sh          # 换端口
 HOST=0.0.0.0 ./webapp/start.sh       # 局域网可访问（手机测试）
 ```
 
-`start.sh` 会同时拉三个进程：主服务（`.venv`，PyTorch，端口 8817）、MLX worker（`mlxrun/.venv`，8818）、GGUF server（C++ 二进制 `llama-tts-server`，8819）。三者依赖互斥，只能进程隔离。页面顶部状态点变绿「就绪」后可生成；MLX 约 1–2 秒就绪，GGUF 约 1 秒，PyTorch 冷启动 40–90 秒，三个引擎按钮会逐个点亮。
+`start.sh` 会同时拉三个进程：主服务（`.venv`，PyTorch，端口 8817）、MLX worker（`engines/mlx/.venv`，8818）、GGUF server（C++ 二进制 `llama-tts-server`，8819）。三者依赖互斥，只能进程隔离。页面顶部状态点变绿「就绪」后可生成；MLX 约 1–2 秒就绪，GGUF 约 1 秒，PyTorch 冷启动 40–90 秒，三个引擎按钮会逐个点亮。
 
 ## 三个引擎
 
@@ -95,7 +95,7 @@ curl -X POST http://127.0.0.1:8819/v1/audio/speech \
 ```
 
 GGUF 的权重由 `llamacpp-omni/llama.cpp-omni-master/tools/omni/voxcpm2/convert_voxcpm2_to_gguf.py` 转换，
-Q8_0 量化用同目录编译出的 `llama-quantize`，产物在 `gguf-models/`（`start.sh` 默认取 `VoxCPM2-BaseLM-Q8_0.gguf` + `VoxCPM2-Acoustic-F16.gguf`，可用环境变量覆盖）。
+Q8_0 量化用同目录编译出的 `llama-quantize`，产物在 `assets/gguf/`（`start.sh` 默认取 `VoxCPM2-BaseLM-Q8_0.gguf` + `VoxCPM2-Acoustic-F16.gguf`，可用环境变量覆盖）。
 
 ```bash
 curl -X POST http://127.0.0.1:8817/api/tts \
@@ -113,7 +113,7 @@ FastAPI（webapp/server.py，.venv）
    │ engine=mlx / gguf 时用 httpx 流式代理
    │ threading.Lock 串行
    ├──────────────► VoxCPM2 / MPS fp32（常驻 11.6 GB）
-   ├──────────────► MLX worker（mlxrun/mlx_worker.py，8818，stdlib HTTP）→ 3.1 GB
+   ├──────────────► MLX worker（engines/mlx/mlx_worker.py，8818，stdlib HTTP）→ 3.1 GB
    └──────────────► llama-tts-server（C++/ggml Metal，8819）→ 3.3 GB
 ```
 
@@ -122,7 +122,7 @@ FastAPI（webapp/server.py，.venv）
 1. **模型常驻 + 进程隔离**：torch、mlx 与 ggml 三套运行时依赖互斥（同一 venv 装不下，GGUF 干脆是 C++ 二进制），所以各自独立进程、独立端口，主服务代理转发。三个模型可同时常驻（本机 64 GB 内存够用），切换引擎零延迟。
 2. **串行推理**：MPS 上并发调用同一模型会相互干扰，PyTorch 侧所有请求共用一把 `threading.Lock`；MLX worker 内部同理。端点写成同步函数，由 Starlette 放进线程池，不阻塞事件循环。
 3. **流式协议**：裸 PCM（int16 小端）分块传输，采样率走响应头。前端用 `AudioContext` 逐块建 `AudioBuffer` 排队播放，同时累积数据供波形绘制与下载。**这个 AudioContext 跨请求复用，一段合成结束时绝不 `close()`**——见下方「流式尾音被截断」。
-4. **MLX 真流式**：mlx-audio 自带的 `generate()` 是假流式（整段跑完只 yield 一次，首包 4.46 s）。`mlxrun/voxcpm_stream.py` 把它的自回归循环搬出来，每 4 个 patch 解码一次；分块解码靠解码器的纯因果结构，带 16 帧左上下文后与整段解码的 SNR 116 dB、与 `generate()` 逐样本一致。细节与实测曲线见 [mlxrun/BENCH.md](../mlxrun/BENCH.md)。
+4. **MLX 真流式**：mlx-audio 自带的 `generate()` 是假流式（整段跑完只 yield 一次，首包 4.46 s）。`engines/mlx/voxcpm_stream.py` 把它的自回归循环搬出来，每 4 个 patch 解码一次；分块解码靠解码器的纯因果结构，带 16 帧左上下文后与整段解码的 SNR 116 dB、与 `generate()` 逐样本一致。细节与实测曲线见 [engines/mlx/BENCH.md](../engines/mlx/BENCH.md)。
 
 ## 验证结果
 
@@ -293,22 +293,24 @@ webapp/
 ```
 
 ```
-mlxrun/
+engines/mlx/
 ├── voxcpm_stream.py    真流式生成 + 分块解码 + LiteTokenizer
 ├── mlx_worker.py       MLX HTTP worker（stdlib，独立 venv）
 ├── verify_stream.py    等价性 / 首包 / 分块参数验证
-├── BENCH.md            方案实测与选型
-└── models/VoxCPM2-8bit 8bit 权重 3.0 GB
+├── bench_mlx.py        MLX 一次性基准
+└── BENCH.md            方案实测与选型
+
+assets/mlx/VoxCPM2-8bit   8bit 权重 3.0 GB（与 PyTorch / GGUF 权重同属 assets/）
 
 llamacpp-omni/llama.cpp-omni-master/
 ├── tools/omni/voxcpm2/ VoxCPM2 的 C++/ggml 实现 + 转换器
 ├── tools/server/server-voxcpm2.cpp  llama-tts-server（OpenAI 兼容）
 └── build-metal/bin/    voxcpm2-cli / llama-tts-server / llama-quantize
 
-gguf-models/
-├── VoxCPM2-BaseLM-Q8_0.gguf     1.6 GB（BaseLM，量化）
-├── VoxCPM2-Acoustic-F16.gguf    1.7 GB（声学部分）
-├── VoxCPM2-BaseLM-F16.gguf      3.0 GB（对照用）
-├── VoxCPM2-BaseLM-F32.gguf      6.0 GB（量化输入）
-└── VoxCPM2-Acoustic-F32.gguf    3.3 GB（对照用）
+assets/gguf/
+├── VoxCPM2-BaseLM-Q8_0.gguf     1.6 GB（BaseLM，量化，生产）
+└── VoxCPM2-Acoustic-F16.gguf    1.7 GB（声学部分，生产）
 ```
+
+> `VoxCPM2-BaseLM-F16/F32` 与 `VoxCPM2-Acoustic-F32` 是对照档兼量化中间产物（合计 12.4 GB），
+> 已清理。需要复跑对照基准时按 [docs/ASSETS.md](../docs/ASSETS.md) 第 4 步从 `assets/pytorch/` 重新导出。

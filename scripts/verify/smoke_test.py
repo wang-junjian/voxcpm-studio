@@ -1,5 +1,6 @@
 """VoxCPM2 本地部署冒烟测试：加载 + 单句合成。"""
 import os, sys, time, json
+from pathlib import Path
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("HF_HUB_OFFLINE", "0")
@@ -8,9 +9,11 @@ import numpy as np
 import torch
 import soundfile as sf
 
-MODEL_DIR = os.path.abspath("models/VoxCPM2")
-OUT_DIR = os.path.abspath("outputs")
-os.makedirs(OUT_DIR, exist_ok=True)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+MODEL_DIR = str(paths.PYTORCH_MODEL)
+OUT_DIR = str(paths.ensure_dirs())
 
 DEVICE = os.environ.get("VOXCPM_DEVICE", "mps")
 t_load = time.time()

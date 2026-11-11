@@ -5,9 +5,12 @@ import sys
 import tempfile
 
 # 先钉死临时目录：沙箱里 tempfile 的探测（写后删）会失败，torch 因此无法导入
-_HERE = os.path.dirname(os.path.abspath(__file__))
-tempfile.tempdir = os.path.join(_HERE, "tmpdir")
-os.makedirs(tempfile.tempdir, exist_ok=True)
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+paths.pin_tempdir()
 
 from funasr import AutoModel  # noqa: E402
 
