@@ -1,6 +1,6 @@
 # 仓库不含的资产，以及怎么重建
 
-这个仓库只放**代码、文档与报告**，不放权重、虚拟环境与编译产物。原因很直接：完整工作目录约 **31 GB**，其中绝大部分是可重建的资产，塞不进 git，也没有必要——它们都能从公开源重建。
+这个仓库只放**代码、文档与报告**，不放权重、虚拟环境与编译产物。原因很直接：完整工作目录约 **14 GB**，其中绝大部分是可重建的资产，塞不进 git，也没有必要——它们都能从公开源重建。
 
 **权重统一收在 `assets/` 下，虚拟环境与上游构建产物各自留在原位**。也就是说：克隆下来只有几十 MB，跑起来需要自己往里填；填完之后 `git status` 依然干净。
 
@@ -8,8 +8,8 @@
 |---|---|---|---|
 | PyTorch 权重 | `assets/pytorch/VoxCPM2/` | 4.6 GB | ModelScope `OpenBMB/VoxCPM2` |
 | MLX 8bit 权重 | `assets/mlx/VoxCPM2-8bit/` | 3.0 GB | HF `mlx-community/VoxCPM2-8bit` |
-| GGUF 权重 | `assets/gguf/` | 16 GB（生产实用 3.3 GB） | 由 PyTorch 权重转换 + 量化 |
-| llama.cpp-omni 源码 + 构建 | `llamacpp-omni/` | 304 MB | 上游快照 + 本仓库 patch + cmake |
+| GGUF 权重 | `assets/gguf/` | 3.3 GB（生产两档） | 由 PyTorch 权重转换 + 量化 |
+| llama.cpp-omni 源码 + 构建 | `llamacpp-omni/` | 70 MB | 上游快照 + 本仓库 patch + cmake |
 | 主环境虚拟环境 | `.venv/` | 2.0 GB | `uv venv` + `requirements.txt`（149 包） |
 | MLX 虚拟环境 | `engines/mlx/.venv/` | 584 MB | `python -m venv` + `engines/mlx/requirements.txt` |
 
@@ -84,6 +84,10 @@ cmake --build build-metal -j8 --target voxcpm2-cli llama-tts-server llama-quanti
 ```
 
 产物：`build-metal/bin/{voxcpm2-cli, llama-tts-server, llama-quantize}`。
+
+> 上游解压出来是 304 MB，其中只有约 70 MB 与 GGUF 路线有关。可以直接删掉这四块：`models/`（上游 LLM 词表测试件，75 MB）、`docs/`（文档站图片，30 MB）、`build/`（另一套非 Metal 构建，23 MB）、`build-metal/` 下除 `bin/` 以外的编译中间产物（106 MB）。`bin/` 里的可执行全部走 `@loader_path` 找 dylib、Metal shader 也内嵌在 `libggml-metal.dylib`，所以那 10 MB 是自包含的。
+>
+> 重新编译时 `cmake -B build-metal` 会重新 configure，删掉缓存与 `.o` 不影响上面这套流程。
 
 > 构建中途不要重命名源码目录 —— CMake 缓存里存的是绝对路径，改名会让缓存整体失效，只能删掉 build 目录重新配置。同理，这棵树**不要**搬进 `assets/`。
 

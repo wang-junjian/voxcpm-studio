@@ -36,7 +36,7 @@ MLX_PID=""
 GGUF_PID=""
 
 if [ ! -x "$PY" ]; then
-  echo "未找到虚拟环境 $PY，请先按 README 部署" >&2
+  echo "未找到虚拟环境 ${PY}，请先按 README 部署" >&2
   exit 1
 fi
 
@@ -57,7 +57,7 @@ if [ "$MLX_ENABLED" = "1" ] && [ -x "$MLX_PY" ] && [ -d "$MLX_MODEL" ]; then
   "$MLX_PY" "$MLX_WORKER" --port "$MLX_PORT" --host "$HOST" &
   MLX_PID=$!
 else
-  echo "MLX worker 未启用（MLX=0 或缺 engines/mlx/.venv、$MLX_MODEL）"
+  echo "MLX worker 未启用（MLX=0 或缺 engines/mlx/.venv、${MLX_MODEL}）"
 fi
 
 # GGUF 引擎是 llama.cpp-omni 的 llama-tts-server，纯 C++/Metal，自带 venv 无关
