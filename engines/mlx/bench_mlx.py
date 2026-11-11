@@ -11,7 +11,10 @@ from pathlib import Path
 import mlx.core as mx
 from mlx_audio.tts.utils import load
 
-MODEL = sys.argv[1] if len(sys.argv) > 1 else "models/VoxCPM2-8bit"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+MODEL = sys.argv[1] if len(sys.argv) > 1 else str(paths.MLX_MODEL)
 TAG = sys.argv[2] if len(sys.argv) > 2 else "8bit"
 
 TEXT_SHORT = "这句话的最后几个字必须在流式播放里完整念出来，不能丢尾巴。"
@@ -19,7 +22,7 @@ TEXT_LONG = (
     "本地部署的语音合成系统，最关键的不是峰值效果，而是稳定性和响应速度。"
     "当模型常驻内存之后，用户点击生成的瞬间就可以开始出声，不必等待整段文本合成完毕。"
 )
-OUT = Path("outputs")
+OUT = paths.ensure_dirs()
 OUT.mkdir(exist_ok=True)
 
 

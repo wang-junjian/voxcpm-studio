@@ -1,6 +1,6 @@
 """VoxCPM2 × MLX 8bit 推理 worker。
 
-跑在 mlxrun/.venv 里（与主服务的 torch 环境隔离），用标准库 HTTP 服务
+跑在 engines/mlx/.venv 里（与主服务的 torch 环境隔离），用标准库 HTTP 服务
 对外提供同一套语义：一次性生成 + 真流式生成。主服务 webapp/server.py 按
 engine 字段把请求代理过来。
 
@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import threading
 import time
 import traceback
@@ -28,8 +29,11 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
 BASE = Path(__file__).resolve().parent
-MODEL_DIR = BASE / "models" / "VoxCPM2-8bit"
+MODEL_DIR = paths.MLX_MODEL
 
 # MLX 缓冲池默认没有上限：被释放的缓冲不会还给系统，只留在池里等复用。
 # 上限是设备的 recommended working set（这台机器 60.8 GB），所以任何一次

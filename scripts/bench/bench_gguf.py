@@ -12,15 +12,25 @@ import sys
 import threading
 import time
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-CLI = os.path.join(ROOT, "llamacpp-omni/llama.cpp-omni-master/build-metal/bin/voxcpm2-cli")
-M = os.path.join(ROOT, "gguf-models")
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+ROOT = str(paths.ROOT)
+CLI = str(paths.GGUF_CLI_BIN)
+M = str(paths.GGUF_DIR)
 
 COMBOS = [
     ("Q8_0 + Acoustic-F16", "VoxCPM2-BaseLM-Q8_0.gguf", "VoxCPM2-Acoustic-F16.gguf"),
     ("Q8_0 + Acoustic-F32", "VoxCPM2-BaseLM-Q8_0.gguf", "VoxCPM2-Acoustic-F32.gguf"),
     ("F16 + Acoustic-F16", "VoxCPM2-BaseLM-F16.gguf", "VoxCPM2-Acoustic-F16.gguf"),
 ]
+
+# F16 / F32 是对照档，体积大且非生产必需，默认不保留。缺档跳过，
+# 需要复跑对照时按 docs/ASSETS.md 从 assets/pytorch 重新导出即可。
+def _present(*names: str) -> bool:
+    return all((Path(M) / n).exists() for n in names)
 
 SHORT = "本地语音合成系统的响应速度，比峰值效果更影响体感。"
 LONG = ("本地部署的语音合成系统，最关键的不是峰值效果，而是稳定性和响应速度。"
@@ -77,11 +87,16 @@ def run(base: str, acoustic: str, text: str, out: str, stream: bool = False):
 
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else None
+    combos = [c for c in COMBOS if _present(c[1], c[2])]
+    if skipped := [c[0] for c in COMBOS if c not in combos]:
+        print(f"跳过（权重不存在）：{', '.join(skipped)}\n")
+    if not combos:
+        sys.exit(f"{M} 下没有可用的权重组合，先按 docs/ASSETS.md 重建")
+    if only:
+        combos = [c for c in combos if only in c[0]] or combos
     print(f"{'组合':26s} {'文本':6s} {'音频':>7s} {'耗时':>7s} {'RTF':>6s} {'首包':>8s} {'峰值':>7s}")
     results = {}
-    for name, base, ac in COMBOS:
-        if only and only not in name:
-            continue
+    for name, base, ac in combos:
         # 预热（首跑要编译 Metal kernel）
         run(base, ac, "预热。", "/tmp/gguf_warm.wav")
         for label, text in (("短", SHORT), ("长", LONG)):
@@ -97,8 +112,8 @@ def main():
             print(f"{name:26s} {label:6s} {dur:7.2f} {el:7.2f} {el/dur:6.3f} {fa_s:>8s} {pk:6.2f}G")
             results[(name, label)] = (dur, el, el / dur, fa, pk)
 
-    # 流式首包（单独测，复用最后一组权重）
-    name, base, ac = COMBOS[0]
+    # 流式首包（单独测，复用第一组可用权重）
+    name, base, ac = combos[0]
     run(base, ac, "预热。", "/tmp/gguf_warm.wav", stream=True)
     print()
     for label, text in (("短", SHORT), ("长", LONG)):

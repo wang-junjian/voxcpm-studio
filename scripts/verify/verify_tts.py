@@ -4,6 +4,7 @@
 输出：outputs/*.wav + outputs/report.json
 """
 import os, sys, time, json, resource
+from pathlib import Path
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -11,9 +12,11 @@ import numpy as np
 import torch
 import soundfile as sf
 
-MODEL_DIR = os.path.abspath("models/VoxCPM2")
-OUT_DIR = os.path.abspath("outputs")
-os.makedirs(OUT_DIR, exist_ok=True)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
+
+MODEL_DIR = str(paths.PYTORCH_MODEL)
+OUT_DIR = str(paths.ensure_dirs())
 DEVICE = os.environ.get("VOXCPM_DEVICE", "mps")
 
 def maxrss_gb() -> float:

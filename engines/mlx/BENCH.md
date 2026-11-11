@@ -119,12 +119,12 @@ tokenizers.Tokenizer.from_file          0.06 s
 cd voxcpm2
 
 # PyTorch 基线
-.venv/bin/python bench_pt.py
+.venv/bin/python scripts/bench/bench_pt.py
 
 # MLX 一次性基准（原始 mlx-audio 路径）
-cd mlxrun
-.venv/bin/python bench_mlx.py models/VoxCPM2-8bit 8bit
-.venv/bin/python bench_mlx.py models/VoxCPM2-bf16-clean bf16
+cd engines/mlx
+.venv/bin/python bench_mlx.py                               # 默认取 paths.MLX_MODEL
+.venv/bin/python bench_mlx.py ../../assets/mlx/VoxCPM2-bf16-clean bf16  # 需先自行量化出 bf16
 .venv/bin/python mlx_stream.py          # 验证 mlx-audio 是否真流式（答案：否）
 
 # 自研真流式：等价性 + 首包 + 分块参数对比
@@ -182,5 +182,5 @@ cd ..
 - `tempfile` 探测临时目录时会"写后删"，被 safe-delete 规则拦截 → `torch` 导入直接失败。解决：导入前 `tempfile.tempdir = <本地目录>`。
 - `git clone` 需要删除 `.git/*.lock`，被拦 → 改用 tarball 解包。
 - ModelScope 上的分片文件名是 `model-00001.safetensors`，而手写 URL 猜的 `model-00001-of-00002.safetensors` 会返回 404 的 HTML（145 字节），`mx.load` 会因此报 "Invalid json header length"。解决：核对 `model.safetensors.index.json` 里的真实文件名。
-- `mlxrun/models/VoxCPM2-bf16` 里混进过一个 145 字节的无效 safetensors，导致 `load()` 扫描整目录时失败 → 用硬链接拼出 `VoxCPM2-bf16-clean` 只放有效文件。
+- `assets/mlx/VoxCPM2-bf16` 里混进过一个 145 字节的无效 safetensors，导致 `load()` 扫描整目录时失败 → 用硬链接拼出 `VoxCPM2-bf16-clean` 只放有效文件。
 - 本机 `import transformers` 要 30–60 秒，见第二节第 5 条。

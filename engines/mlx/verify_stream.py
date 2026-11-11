@@ -4,13 +4,17 @@
 """
 import sys
 import time
+from pathlib import Path
 
 import mlx.core as mx
 import numpy as np
 
-from voxcpm_stream import load_model_lite, stream_generate
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import paths  # noqa: E402
 
-MODEL = sys.argv[1] if len(sys.argv) > 1 else "models/VoxCPM2-8bit"
+from voxcpm_stream import load_model_lite, stream_generate  # noqa: E402
+
+MODEL = sys.argv[1] if len(sys.argv) > 1 else str(paths.MLX_MODEL)
 TEXT = (
     "本地部署的语音合成系统，最关键的不是峰值效果，而是稳定性和响应速度。"
     "当模型常驻内存之后，用户点击生成的瞬间就可以开始出声，"

@@ -17,11 +17,16 @@ GGUF_PORT="${GGUF_PORT:-8819}"
 MLX_ENABLED="${MLX:-1}"
 GGUF_ENABLED="${GGUF:-1}"
 PY=".venv/bin/python"
-MLX_PY="mlxrun/.venv/bin/python"
+MLX_PY="engines/mlx/.venv/bin/python"
+MLX_WORKER="engines/mlx/mlx_worker.py"
 
+# 权重路径：与 paths.py 的默认值一致。字面量只在这里出现一次，避免多处漂移。
+ASSETS="${VOXCPM_ASSETS:-assets}"
+MLX_MODEL="${VOXCPM_MLX_MODEL:-$ASSETS/mlx/VoxCPM2-8bit}"
+GGUF_DIR="${VOXCPM_GGUF_DIR:-$ASSETS/gguf}"
 GGUF_BIN="llamacpp-omni/llama.cpp-omni-master/build-metal/bin/llama-tts-server"
-GGUF_BASE_LM="${GGUF_BASE_LM:-gguf-models/VoxCPM2-BaseLM-Q8_0.gguf}"
-GGUF_ACOUSTIC="${GGUF_ACOUSTIC:-gguf-models/VoxCPM2-Acoustic-F16.gguf}"
+GGUF_BASE_LM="${GGUF_BASE_LM:-$GGUF_DIR/VoxCPM2-BaseLM-Q8_0.gguf}"
+GGUF_ACOUSTIC="${GGUF_ACOUSTIC:-$GGUF_DIR/VoxCPM2-Acoustic-F16.gguf}"
 # AudioVAE 每图的 patch 数。1=逐 patch 解码（首块最小、最慢）；4=攒 4 个一起解
 # （实测 RTF 1.6→1.3，首包不变，波形与 1 的差异 63 dB SNR，听不出来）。
 # 首块始终单独出，所以首包延迟不受影响。
@@ -45,13 +50,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # MLX worker 跑在独立 venv 里（torch 与 mlx 依赖互斥），主服务按 engine 代理过去
-if [ "$MLX_ENABLED" = "1" ] && [ -x "$MLX_PY" ] && [ -d mlxrun/models/VoxCPM2-8bit ]; then
+if [ "$MLX_ENABLED" = "1" ] && [ -x "$MLX_PY" ] && [ -d "$MLX_MODEL" ]; then
   export VOXCPM_MLX_URL="${VOXCPM_MLX_URL:-http://127.0.0.1:${MLX_PORT}}"
+  export VOXCPM_MLX_MODEL="$MLX_MODEL"
   echo "MLX 8bit worker → ${VOXCPM_MLX_URL}"
-  "$MLX_PY" mlxrun/mlx_worker.py --port "$MLX_PORT" --host "$HOST" &
+  "$MLX_PY" "$MLX_WORKER" --port "$MLX_PORT" --host "$HOST" &
   MLX_PID=$!
 else
-  echo "MLX worker 未启用（MLX=0 或缺 mlxrun/.venv、mlxrun/models/VoxCPM2-8bit）"
+  echo "MLX worker 未启用（MLX=0 或缺 engines/mlx/.venv、$MLX_MODEL）"
 fi
 
 # GGUF 引擎是 llama.cpp-omni 的 llama-tts-server，纯 C++/Metal，自带 venv 无关
@@ -64,7 +70,7 @@ if [ "$GGUF_ENABLED" = "1" ] && [ -x "$GGUF_BIN" ] \
     --host "$HOST" --port "$GGUF_PORT" >/tmp/llama-tts-server.log 2>&1 &
   GGUF_PID=$!
 else
-  echo "GGUF 引擎未启用（GGUF=0 或缺 $GGUF_BIN / gguf-models 下的权重）"
+  echo "GGUF 引擎未启用（GGUF=0 或缺 $GGUF_BIN / $GGUF_DIR 下的权重）"
 fi
 
 echo "VoxCPM2 Studio → http://${HOST}:${PORT}"

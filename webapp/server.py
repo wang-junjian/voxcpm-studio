@@ -3,20 +3,21 @@
 双引擎：
 
 * ``torch`` —— 本项目 .venv 里的 PyTorch MPS fp32，进程内常驻，MPS 单实例串行。
-* ``mlx``   —— mlxrun/.venv 里的 MLX 8bit（3.0 GB，RTF 0.70），由
-  ``mlxrun/mlx_worker.py`` 以独立进程提供，本服务按请求代理过去。两个引擎的
+* ``mlx``   —— engines/mlx/.venv 里的 MLX 8bit（3.0 GB，RTF 0.70），由
+  ``engines/mlx/mlx_worker.py`` 以独立进程提供，本服务按请求代理过去。两个引擎的
   Python 依赖互不兼容（torch 与 mlx 分处两个 venv），所以必须进程隔离。
 
 请求体里的 ``engine`` 字段决定走哪条路径；缺省用 MLX，不可用时回落到 torch。
 
 启动:
   .venv/bin/python webapp/server.py --port 8817
-  mlxrun/.venv/bin/python mlxrun/mlx_worker.py --port 8818   # 可选，MLX 引擎
+  engines/mlx/.venv/bin/python engines/mlx/mlx_worker.py --port 8818   # 可选，MLX 引擎
 """
 import argparse
 import asyncio
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -26,11 +27,13 @@ from pathlib import Path
 
 import httpx
 
+# 路径唯一真源。paths 只依赖标准库，可以安全地放在 torch 之前导入。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import paths  # noqa: E402
+
 # 先钉死临时目录再导入 torch：某些受限环境（如 safe-delete 拦截写后删）里，
 # tempfile 的默认目录探测会失败，导致 torch 直接 ImportError。
-_TMP = Path(__file__).resolve().parent.parent / "tmpdir"
-_TMP.mkdir(parents=True, exist_ok=True)
-tempfile.tempdir = str(_TMP)
+_TMP = paths.pin_tempdir()
 
 import numpy as np
 import soundfile as sf
@@ -40,7 +43,7 @@ from pydantic import BaseModel, Field
 
 BASE = Path(__file__).resolve().parent
 ROOT = BASE.parent
-MODEL_DIR = ROOT / "models" / "VoxCPM2"
+MODEL_DIR = paths.PYTORCH_MODEL
 RUNS = BASE / "runs"
 REFS = BASE / "refs"
 STATIC = BASE / "static"
