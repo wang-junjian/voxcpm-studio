@@ -21,8 +21,10 @@ MLX 那 5.71% 是 ASR 把「整段」听成「诊段」造成的单字误识，�
 - **要最低首包延迟用 GGUF**：首包 300 ms 出头，但整体吞吐慢 1.6 倍，且流式节奏慢于实时。
 - **PyTorch 只作兜底与对照**：最忠实、最稳，但 11.6 GB 常驻、加载 91 秒。
 
-两份完整实测报告（架构图、性能图表、复现命令、局限说明）：
-[**tri-route-comparison.html**](tri-route-comparison.html) · [**gguf-efficiency.html**](gguf-efficiency.html)
+三份完整报告（架构图、性能图表、复现命令、局限说明）：
+[**tri-route-comparison.html**](tri-route-comparison.html) · [**gguf-efficiency.html**](gguf-efficiency.html) · [**engineering-practice.html**](engineering-practice.html)
+
+前两份讲性能数字，第三份讲判断过程——包括定位错了的地方。
 
 ---
 
@@ -111,6 +113,7 @@ voxcpm-studio/
 │   └── shots/                   报告与界面截图
 ├── tri-route-comparison.html    三路线对比报告（单文件、离线可读）
 ├── gguf-efficiency.html         GGUF 瓶颈定位与优化报告（单文件）
+├── engineering-practice.html    工程实践复盘：定位、翻车、收口与方法论（单文件）
 ├── tts.py                       模型 CLI（PyTorch 侧）
 ├── bench_live.py                服务态基准（首包 / 断供 / RTF）
 ├── bench_gguf*.py               GGUF 的 CLI 口径与服务态口径基准
