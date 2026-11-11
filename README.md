@@ -49,7 +49,7 @@ MLX 那 5.71% 是 ASR 把「整段」听成「诊段」造成的单字误识，�
 
 ## 快速开始
 
-> **仓库不含模型权重、虚拟环境与编译产物**（约 31 GB，`.gitignore` 已全部排除）。这些目录就在项目根目录下，只是不进 git：克隆下来只有几十 MB，把自己那份权重填进同名路径即可。首次运行请先按 [docs/ASSETS.md](docs/ASSETS.md) 重建资产，再回到这里。
+> **仓库不含模型权重、虚拟环境与编译产物**（约 14 GB，`.gitignore` 已全部排除）。这些目录就在项目根目录下，只是不进 git：克隆下来只有几十 MB，把自己那份权重填进同名路径即可。首次运行请先按 [docs/ASSETS.md](docs/ASSETS.md) 重建资产，再回到这里。
 
 ```bash
 git clone <this-repo> voxcpm-studio && cd voxcpm-studio
@@ -135,12 +135,12 @@ voxcpm-studio/
 │   └── gguf/                     3.3 GB GGUF 生产两档（Q8_0 + Acoustic-F16）
 ├── .venv/                        2.0 GB 主环境（149 包）
 ├── engines/mlx/.venv/            584 MB MLX 环境（38 包）
-└── llamacpp-omni/                304 MB 上游源码 + Metal 构建产物
+└── llamacpp-omni/                70 MB 上游源码 + Metal 构建产物
 ```
 
 所有路径由 [paths.py](paths.py) 统一解析，默认值相对该文件定位，因此**在任何工作目录下运行结果一致**。权重换位置只改这一个文件，或用环境变量覆盖；直接运行 `python paths.py` 会打印当前解析结果并检查资产是否存在。
 
-`llamacpp-omni/` 刻意不搬进 `assets/`：那是 CMake 构建出的可执行，依赖同目录的 dylib 与 Metal shader，整体迁移会破坏查找路径。
+`llamacpp-omni/` 刻意不搬进 `assets/`：那是 CMake 构建出的可执行，依赖同目录的 dylib 与 Metal shader，整体迁移会破坏查找路径。上游快照里与 GGUF 路线无关的部分（`models/` 的 LLM 词表测试件 75 MB、`docs/` 文档站 30 MB、另一套非 Metal 的 `build/` 23 MB、`build-metal/` 的编译中间产物）已剔除，剩下的只有重新编译与运行 `llama-tts-server` 真正需要的东西。
 
 ---
 
